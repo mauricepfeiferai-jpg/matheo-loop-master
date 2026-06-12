@@ -4,6 +4,7 @@ import json
 import os
 import glob
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import shutil
 
 BUS = "/var/lib/loop-master/findings.jsonl"
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -14,8 +15,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/data":
             self.send_json(self._collect())
+        elif self.path == "/health":
+            self.send_json(self._health())
         elif self.path == "/":
             self.send_file("index.html", "text/html")
+        else:
+            self.send_error(404)
+
+    def do_POST(self):
+        if self.path == "/ack":
+            self._ack()
         else:
             self.send_error(404)
 
@@ -26,6 +35,47 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
+
+    def _health(self):
+        import os, subprocess
+        bus_ok = os.path.exists(BUS)
+        disk = shutil.disk_usage("/var/lib/loop-master")
+        disk_pct = round((disk.used / disk.total) * 100, 1)
+        # Gateway check
+        try:
+            r = subprocess.run(["systemctl", "--user", "is-active", "hermes-gateway-jarvis"],
+                               capture_output=True, text=True, timeout=3)
+            gateway = r.stdout.strip() == "active"
+        except Exception:
+            gateway = False
+        return {
+            "status": "ok" if bus_ok and gateway else "degraded",
+            "bus": "ok" if bus_ok else "missing",
+            "gateway": "ok" if gateway else "down",
+            "disk_used_pct": disk_pct,
+        }
+
+    def _ack(self):
+        import cgi
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length).decode('utf-8')
+        try:
+            data = json.loads(body)
+            subject = data.get("subject", "")
+            # Write ack marker to bus
+            finding = {
+                "sensor": "dashboard",
+                "severity": "info",
+                "f_class": "dashboard.ack",
+                "subject": f"ACK: {subject}",
+                "evidence": "Manually acknowledged via dashboard",
+                "ts": datetime.now(timezone.utc).isoformat(),
+            }
+            with open(BUS, "a") as f:
+                f.write(json.dumps(finding, ensure_ascii=False) + "\n")
+            self.send_json({"acknowledged": subject})
+        except Exception as e:
+            self.send_error(400, str(e))
 
     def send_file(self, name, ctype):
         path = os.path.join(ROOT, name)
