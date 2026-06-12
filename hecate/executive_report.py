@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Executive Report — Lösungen statt Probleme.
+"""Executive Report — Loesungen statt Probleme.
 
 Struktur:
 1. Was ich schon gefixt habe (L2 autonom)
@@ -8,18 +8,34 @@ Struktur:
 4. Dashboard + Actions
 
 Filtert Info-Spam raus, gruppiert nach Handlbarkeit.
+Ignoriert behobene/alte Scanner-Fehler.
 """
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 BUS = Path("/var/lib/loop-master/findings.jsonl")
 
-def read_bus(n=100):
+
+def read_bus(n=100, hours=24):
     if not BUS.exists():
         return []
-    with open(BUS) as f:
-        return [json.loads(l) for l in f if l.strip()][-n:]
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    out = []
+    for line in open(BUS):
+        if not line.strip():
+            continue
+        f = json.loads(line)
+        # Skip alte Scanner-Fehler (behoben)
+        if f.get("sensor") == "understand" and "scan-failed" in f.get("f_class", ""):
+            continue
+        try:
+            ts = datetime.fromisoformat(f.get("ts", ""))
+            if ts > cutoff:
+                out.append(f)
+        except Exception:
+            pass
+    return out[-n:]
 
 
 def _has_suggested_fix(f):
@@ -36,7 +52,7 @@ def _is_new_today(f):
 
 
 def generate_executive_report():
-    findings = read_bus(200)
+    findings = read_bus(200, hours=24)
 
     auto_fixed = []
     needs_go = []
@@ -106,12 +122,12 @@ def generate_executive_report():
 
 
 def generate_quick_status():
-    findings = read_bus(50)
+    findings = read_bus(50, hours=24)
     krit = sum(1 for f in findings if f.get("severity") == "krit")
     hoch = sum(1 for f in findings if f.get("severity") == "hoch")
 
     if krit == 0 and hoch == 0:
-        return "Alles grün. Keine kritischen oder hohen Findings."
+        return "Alles gruen. Keine kritischen oder hohen Findings."
 
     action_items = [f for f in findings if f.get("severity") in ("krit", "hoch") and f.get("suggested_fix")]
     if action_items:
