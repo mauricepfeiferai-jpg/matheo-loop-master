@@ -1,0 +1,63 @@
+# Hecate Zentrale Konfiguration
+# Alle Pfade und Einstellungen an einem Ort
+
+paths:
+  var_dir: /var/lib/loop-master
+  log_dir: /var/log/loop-master
+  project_dir: /root/projects/loop-master
+  proposals_dir: /root/projects/loop-master/proposals
+
+bus:
+  findings: /var/lib/loop-master/findings.jsonl
+  max_size_mb: 10
+  rotation_keep: 2
+
+ledger:
+  db: /var/lib/loop-master/ledger.db
+
+memory:
+  store_dir: /var/lib/loop-master/agent_memory
+  decisions: /var/lib/loop-master/agent_memory/decisions.jsonl
+  profile: /var/lib/loop-master/agent_memory/profile.json
+  hecate_state: /var/lib/loop-master/agent_memory/hecate_state.json
+
+dashboard:
+  port: 8877
+  host: ""
+  screenshot_dir: /tmp
+
+sensors:
+  run_interval_min: 15
+  timeout_default_sec: 60
+  all:
+    - config_drift
+    - disk_trend
+    - restart_loops
+    - cron_verify
+    - secret_scan
+    - cert_expiry
+    - ledger_stale
+    - docker_health
+    - network_latency
+
+rate_limits:
+  agent_bucket_capacity: 3
+  agent_bucket_refill_per_sec: 0.05
+  telegram_bucket_capacity: 5
+  telegram_bucket_refill_per_sec: 0.1
+
+escalation:
+  default_channel: telegram
+  channels:
+    - telegram
+    - email
+  severity_map:
+    krit: telegram
+    hoch: telegram
+    mittel: telegram
+    info: log_only
+
+agent_team:
+  max_workers: 3
+  default_model: claude-sonnet-4-6
+  default_timeout_sec: 600
