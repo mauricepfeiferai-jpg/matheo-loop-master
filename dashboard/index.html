@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hecate Dashboard</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --border: #2a2a2a;
+    --text: #e0e0e0;
+    --muted: #888;
+    --krit: #ff4444;
+    --hoch: #ff8800;
+    --mittel: #ffcc00;
+    --info: #4488ff;
+    --ok: #44ff88;
+    --accent: #d4a574;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { font-size: 16px; color: var(--accent); letter-spacing: 1px; }
+  header .status { color: var(--muted); font-size: 11px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 12px;
+    padding: 16px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+  }
+  .card h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+  }
+  .finding {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid #1a1a1a;
+  }
+  .finding:last-child { border-bottom: none; }
+  .ring { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .ring.krit { background: var(--krit); box-shadow: 0 0 6px var(--krit); }
+  .ring.hoch { background: var(--hoch); box-shadow: 0 0 4px var(--hoch); }
+  .ring.mittel { background: var(--mittel); }
+  .ring.info { background: var(--info); }
+  .ring.ok { background: var(--ok); }
+  .finding-text { flex: 1; }
+  .finding-subject { font-weight: 600; color: var(--text); }
+  .finding-evidence { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .stats {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .stat-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .agent-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid #1a1a1a;
+  }
+  .agent-row:last-child { border-bottom: none; }
+  .agent-status { font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+  .agent-status.ok { background: rgba(68,255,136,0.15); color: var(--ok); }
+  .agent-status.pending { background: rgba(68,136,255,0.15); color: var(--info); }
+  .agent-status.failed { background: rgba(255,68,68,0.15); color: var(--krit); }
+  .refresh {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    transition: transform 0.2s;
+  }
+  .refresh:hover { transform: scale(1.1); }
+  .project-pill {
+    display: inline-block;
+    background: #1a1a2e;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 4px 10px;
+    margin: 3px;
+    font-size: 11px;
+  }
+  .project-pill .lang { color: var(--muted); }
+  .project-pill .files { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌑 HECATE</h1>
+  <div class="status" id="last-update">Loading...</div>
+</header>
+
+<div class="grid">
+  <!-- Findings Card -->
+  <div class="card" style="grid-column: span 2;">
+    <h2>🔔 Notifications</h2>
+    <div id="findings-container">
+      <div class="finding"><div class="ring info"></div><div class="finding-text"><div class="finding-subject">Loading...</div></div></div>
+    </div>
+  </div>
+
+  <!-- Stats Card -->
+  <div class="card">
+    <h2>📊 System Health</h2>
+    <div class="stats">
+      <div class="stat"><div class="stat-value" id="stat-krit">0</div><div class="stat-label">Kritisch</div></div>
+      <div class="stat"><div class="stat-value" id="stat-hoch">0</div><div class="stat-label">Hoch</div></div>
+      <div class="stat"><div class="stat-value" id="stat-mittel">0</div><div class="stat-label">Mittel</div></div>
+      <div class="stat"><div class="stat-value" id="stat-info">0</div><div class="stat-label">Info</div></div>
+    </div>
+  </div>
+
+  <!-- Agent Team Card -->
+  <div class="card">
+    <h2>👥 Agent Team</h2>
+    <div id="agent-container">
+      <div class="agent-row"><span> researcher</span><span class="agent-status ok">ok</span></div>
+      <div class="agent-row"><span> coder</span><span class="agent-status ok">ok</span></div>
+      <div class="agent-row"><span> reviewer</span><span class="agent-status ok">ok</span></div>
+    </div>
+  </div>
+
+  <!-- Projects Card -->
+  <div class="card" style="grid-column: span 2;">
+    <h2>📁 Projects</h2>
+    <div id="projects-container">
+      <div class="project-pill">content-engine <span class="lang">python</span> <span class="files">197</span></div>
+      <div class="project-pill">loop-master <span class="lang">python</span> <span class="files">55</span></div>
+    </div>
+  </div>
+</div>
+
+<button class="refresh" onclick="loadData()" title="Refresh">↻</button>
+
+<script>
+async function loadData() {
+  document.getElementById('last-update').textContent = 'Updating...';
+  try {
+    const res = await fetch('/api/data');
+    const data = await res.json();
+    renderFindings(data.findings || []);
+    renderStats(data.findings || []);
+    renderAgents(data.agents || []);
+    renderProjects(data.projects || []);
+    document.getElementById('last-update').textContent = new Date().toLocaleTimeString('de-DE');
+  } catch(e) {
+    document.getElementById('last-update').textContent = 'Offline — ' + e.message;
+  }
+}
+
+function renderFindings(findings) {
+  const c = document.getElementById('findings-container');
+  if (!findings.length) { c.innerHTML = '<div class="finding"><div class="ring ok"></div><div class="finding-text"><div class="finding-subject">Alles OK</div></div></div>'; return; }
+  c.innerHTML = findings.slice(0, 20).map(f => {
+    const sev = f.severity || 'info';
+    return `<div class="finding">
+      <div class="ring ${sev}"></div>
+      <div class="finding-text">
+        <div class="finding-subject">${f.subject || 'Unbekannt'}</div>
+        <div class="finding-evidence">${(f.evidence || '').substring(0, 120)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderStats(findings) {
+  const counts = {krit:0, hoch:0, mittel:0, info:0};
+  findings.forEach(f => { if (counts[f.severity] !== undefined) counts[f.severity]++; });
+  document.getElementById('stat-krit').textContent = counts.krit;
+  document.getElementById('stat-hoch').textContent = counts.hoch;
+  document.getElementById('stat-mittel').textContent = counts.mittel;
+  document.getElementById('stat-info').textContent = counts.info;
+}
+
+function renderAgents(agents) {
+  const c = document.getElementById('agent-container');
+  c.innerHTML = agents.map(a => `<div class="agent-row">
+    <span>${a.agent_type}</span>
+    <span class="agent-status ${a.status}">${a.status}</span>
+  </div>`).join('');
+}
+
+function renderProjects(projects) {
+  const c = document.getElementById('projects-container');
+  c.innerHTML = projects.map(p => `<div class="project-pill">
+    ${p.name} <span class="lang">${(p.languages || []).slice(0,2).join(',')}</span>
+    <span class="files">${p.totalFiles}</span>
+  </div>`).join('');
+}
+
+// Initial load
+loadData();
+// Auto-refresh every 60s
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>
