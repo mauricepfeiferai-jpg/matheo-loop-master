@@ -32,3 +32,9 @@ Vergleicht laufende Systemkonfiguration gegen erwarteten Zustand. Findet Drop-In
 - "Das läuft schon so lange" → Drift akkumuliert
 - "Ich habe nur schnell was geändert" → Undokumentierte Änderung
 - Drop-In ohne existierende Unit
+
+
+## Known Issues
+
+- config-drift.env-conflict: Aufgetreten 6x. Prüfe vor jeder Ausführung.
+- config-drift.not-traversable: Aufgetreten 6x. Prüfe vor jeder Ausführung.

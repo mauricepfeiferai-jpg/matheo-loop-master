@@ -381,7 +381,7 @@ def _should_ignore(path: Path, patterns: list[str]) -> bool:
 
 def scan_project(project_root: Path, custom_ignore: list[str] | None = None) -> dict:
     """Haupteinstieg: Scant ein Projekt und gibt Inventory-Dict zurück."""
-    root = project_root.resolve()
+    root = Path(project_root).resolve()
 
     # Ignore-Patterns sammeln
     ignore_patterns = _default_understandignore()

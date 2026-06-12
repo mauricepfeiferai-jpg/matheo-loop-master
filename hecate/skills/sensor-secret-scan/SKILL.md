@@ -31,3 +31,8 @@ Regex-basierte Suche nach Token-Mustern in Dateien, mit Perm-Check (world-readab
 - "Das ist nur für Tests" → Secrets gehören nirgends
 - "Ich lösche es später" → Wird nie gelöscht
 - Token in Logs oder Config-Beispielen
+
+
+## Known Issues
+
+- secret.plaintext-env: Aufgetreten 21x. Prüfe vor jeder Ausführung.
