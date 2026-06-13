@@ -1,5 +1,5 @@
 ---
-status: telegram_approval
+status: vorgeschlagen
 loop: housekeep-ask-large_dir-.git_QUARANTINED_20260524_1353
 erstellt: durch hecate.system_housekeeper
 telegram_approval: required

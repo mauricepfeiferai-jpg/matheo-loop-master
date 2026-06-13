@@ -1,5 +1,5 @@
 ---
-status: telegram_approval
+status: vorgeschlagen
 loop: housekeep-ask-large_dir-legal_mac_pull_2026-06-05
 erstellt: durch hecate.system_housekeeper
 telegram_approval: required

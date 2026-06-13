@@ -34,17 +34,16 @@ def test_notify_pending_sends_one_batch_and_logs(tmp_path, monkeypatch):
             f"**Begründung:** older than threshold"
         )
 
-    with patch("hecate.proposal_notifier.send_message") as mock_send:
-        from hecate.hermes_adapter import HermesResult
-        mock_send.return_value = HermesResult(ok=True, stdout="sent", returncode=0)
+    with patch("hecate.proposal_notifier.send_message_with_markup") as mock_send:
+        mock_send.return_value = True
         from hecate import proposal_notifier as pn
         ids = pn.notify_pending()
 
     assert len(ids) == 7
     assert mock_send.call_count == 1
-    sent_text = mock_send.call_args[0][1]
+    sent_text = mock_send.call_args[0][0]
     assert "Top" in sent_text
-    assert "approve-all" in sent_text
+    assert "HECATE Freigabe" in sent_text
     assert (tmp_path / "sent.jsonl").exists()
 
 

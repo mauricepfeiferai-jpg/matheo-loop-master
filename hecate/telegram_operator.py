@@ -192,34 +192,7 @@ class TelegramOperator:
                 lines.append(f"• {p['name']}")
             return self._send(chat_id, "\n".join(lines))
 
-        if cmd in ("/approve", "/deny"):
-            proposal_id = arg.strip()
-            if not proposal_id:
-                return self._send(chat_id, "Bitte Proposal-ID angeben: /approve <name>")
-            status = "approved" if cmd == "/approve" else "rejected"
-            ok = self._set_proposal_status(proposal_id, status)
-            if not ok:
-                return self._send(chat_id, f"❌ Proposal {proposal_id} nicht gefunden.")
-            if status == "approved":
-                self._send(chat_id, f"✅ {proposal_id} freigegeben. HECATE fuehrt es im naechsten Loop aus.")
-            else:
-                self._send(chat_id, f"❌ {proposal_id} abgelehnt.")
-            return
 
-        if cmd == "/approve-all":
-            from hecate.proposal_notifier import mark_all
-            changed = mark_all("approved")
-            return self._send(chat_id, f"✅ {len(changed)} Proposals freigegeben. Naechster Loop setzt sie um.")
-
-        if cmd == "/deny-all":
-            from hecate.proposal_notifier import mark_all
-            changed = mark_all("rejected")
-            return self._send(chat_id, f"❌ {len(changed)} Proposals abgelehnt.")
-
-        if cmd == "/skip-all":
-            from hecate.proposal_notifier import mark_all
-            changed = mark_all("vorgeschlagen")
-            return self._send(chat_id, f"⏭ {len(changed)} Proposals auf vorgeschlagen zurueckgesetzt. Heute keine weiteren Erinnerungen.")
 
         # Unbekannter Slash → als Prompt behandeln
         return self.handle(chat_id, text=cmd + " " + arg)
@@ -237,6 +210,39 @@ class TelegramOperator:
         if action == "no":
             self.memory.set_status(proposal_id, "rejected")
             return self._send(chat_id, f"❌ {proposal_id} abgelehnt.")
+
+        if action == "approve":
+            ok = self._set_proposal_status(proposal_id, "approved")
+            if not ok:
+                return self._send(chat_id, f"❌ Proposal {proposal_id} nicht gefunden.")
+            return self._send(chat_id, f"✅ {proposal_id} freigegeben. Naechster Loop setzt es um.")
+
+        if action == "deny":
+            ok = self._set_proposal_status(proposal_id, "rejected")
+            if not ok:
+                return self._send(chat_id, f"❌ Proposal {proposal_id} nicht gefunden.")
+            return self._send(chat_id, f"❌ {proposal_id} abgelehnt.")
+
+        if action == "skip":
+            ok = self._set_proposal_status(proposal_id, "vorgeschlagen")
+            if not ok:
+                return self._send(chat_id, f"❌ Proposal {proposal_id} nicht gefunden.")
+            return self._send(chat_id, f"⏭ {proposal_id} auf später verschoben.")
+
+        if action == "approve-all":
+            from hecate.proposal_notifier import mark_all
+            changed = mark_all("approved")
+            return self._send(chat_id, f"✅ {len(changed)} Proposals freigegeben.")
+
+        if action == "deny-all":
+            from hecate.proposal_notifier import mark_all
+            changed = mark_all("rejected")
+            return self._send(chat_id, f"❌ {len(changed)} Proposals abgelehnt.")
+
+        if action == "snooze":
+            from hecate.proposal_notifier import snooze
+            changed = snooze()
+            return self._send(chat_id, f"🔕 {len(changed)} Proposals auf später verschoben. Heute Ruhe.")
 
         if action == "details":
             path = Path("/root/projects/loop-master/proposals") / f"{proposal_id}.md"

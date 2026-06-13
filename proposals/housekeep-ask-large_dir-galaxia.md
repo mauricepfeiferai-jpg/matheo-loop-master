@@ -1,5 +1,5 @@
 ---
-status: telegram_approval
+status: vorgeschlagen
 loop: housekeep-ask-large_dir-galaxia
 erstellt: durch hecate.system_housekeeper
 telegram_approval: required
