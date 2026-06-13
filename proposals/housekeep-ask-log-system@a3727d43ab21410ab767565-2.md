@@ -1,5 +1,5 @@
 ---
-status: vorgeschlagen
+status: telegram_approval
 loop: housekeep-ask-log-system@a3727d43ab21410ab767565
 erstellt: durch hecate.system_housekeeper
 telegram_approval: required

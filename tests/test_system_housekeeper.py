@@ -15,9 +15,19 @@ def test_classify_docker_is_safe_delete():
 def test_classify_old_backup_is_safe_archive():
     c = Candidate(path="/root/_backups/foo", size_bytes=10**9, age_days=10,
                   category="old_backup", reason="older than 3 days")
-    classified = classify_candidate(None, c)
+    with patch("hecate.system_housekeeper._is_active_project", return_value=False):
+        classified = classify_candidate(None, c)
     assert classified.risk_class == "safe_archive"
     assert classified.action == "archive_to_backup"
+
+
+def test_classify_active_project_requires_approval():
+    c = Candidate(path="/root/openclaw", size_bytes=10**9, age_days=90,
+                  category="deprecated", reason="old")
+    with patch("hecate.system_housekeeper._is_active_project", return_value=True):
+        classified = classify_candidate(None, c)
+    assert classified.risk_class == "ask_maurice"
+    assert classified.action == "ask"
 
 
 def test_classify_vault_requires_approval():

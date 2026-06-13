@@ -1,5 +1,5 @@
 ---
-status: vorgeschlagen
+status: telegram_approval
 loop: housekeep-ask-large_dir-gpe-galaxia-second-brain
 erstellt: durch hecate.system_housekeeper
 telegram_approval: required

@@ -76,6 +76,17 @@ state.save()
 print(f'STATE.md aktualisiert: {krit} krit / {hoch} hoch')
 " >> "$LOG" 2>&1
 
+# ── 8. System-Housekeeping: scan + classify + propose ──
+python3 "$BASE/hecate/system_housekeeper.py" scan >> "$LOG" 2>&1
+python3 "$BASE/hecate/system_housekeeper.py" classify >> "$LOG" 2>&1
+python3 "$BASE/hecate/system_housekeeper.py" propose >> "$LOG" 2>&1
+
+# ── 9. Telegram-Freigabe-Anfragen fuer grosse Entscheidungen ──
+python3 "$BASE/hecate/proposal_notifier.py" >> "$LOG" 2>&1
+
+# ── 10. Freigegebene Housekeeping-Proposals ausfuehren (nur safe Klassen) ──
+python3 "$BASE/hecate/housekeeping_worker.py" --apply-approved >> "$LOG" 2>&1
+
 # ── 7. Kein Telegram-Spam mehr ──
 # Roh-Findings werden lokal geloggt und in Reports verdichtet.
 # Telegram sendet nur noch echte Entscheidungs-Proposals (siehe hecate/proposal_bot.py).

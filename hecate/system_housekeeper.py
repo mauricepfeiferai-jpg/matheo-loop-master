@@ -166,6 +166,19 @@ def scan_old_backups(archive_base: Path = Path("/root/_backups"), max_age_days: 
     return sorted(out, key=lambda x: x.size_bytes, reverse=True)
 
 
+def _is_active_project(name: str) -> bool:
+    """Prueft, ob ein systemd-Service mit dem Namen laeuft/gerade startet."""
+    try:
+        r = subprocess.run(
+            ["systemctl", "is-active", f"{name}.service"],
+            capture_output=True, text=True, timeout=5,
+        )
+        state = r.stdout.strip().lower()
+        return state in ("active", "activating")
+    except Exception:
+        return False
+
+
 def scan_deprecated_dirs() -> list[Candidate]:
     markers = [
         "/opt/_DEPRECATED_",
@@ -219,12 +232,22 @@ def classify_candidate(router: ReasoningRouter | None, c: Candidate) -> Candidat
     p = Path(c.path)
     size_gb = c.size_bytes / 1024**3
 
-    # Hard rules
-    if "/vault" in c.path or "/etc" in c.path or "/root/." in c.path or size_gb > 10:
+    # Hard rules: always ask for protected/system paths
+    protected = ("/vault", "/etc", "/root/.", "/var/lib/docker", "/var/lib/systemd",
+                 "/var/lib/snapd", "/snap", "/boot", "/usr", "/lib", "/proc", "/sys")
+    if any(pat in c.path for pat in protected) or size_gb > 10:
         c.risk_class = "ask_maurice"
         c.action = "ask"
         c.confidence = 0.95
-        c.evidence = "Protected path or >10 GB; human decision required"
+        c.evidence = "Protected/system path or >10 GB; human decision required"
+        return c
+
+    # Service names / active processes
+    if c.path.endswith(".service") or c.path.endswith(".timer") or ".service.d" in c.path:
+        c.risk_class = "ask_maurice"
+        c.action = "ask"
+        c.confidence = 0.95
+        c.evidence = "Systemd unit or drop-in; never auto-modify"
         return c
 
     if c.category == "docker":
@@ -234,11 +257,33 @@ def classify_candidate(router: ReasoningRouter | None, c: Candidate) -> Candidat
         c.evidence = "Docker reclaimable space is safe to prune"
         return c
 
+    if c.path.startswith("/root/_archive"):
+        c.risk_class = "ask_maurice"
+        c.action = "ask"
+        c.confidence = 0.9
+        c.evidence = "Already archived under /root/_archive; do not auto-move again"
+        return c
+
     if c.category in ("old_backup", "deprecated"):
+        name = Path(c.path).name
+        base_name = name.split("-")[0].split("_")[0]
+        if _is_active_project(name) or _is_active_project(base_name):
+            c.risk_class = "ask_maurice"
+            c.action = "ask"
+            c.confidence = 0.9
+            c.evidence = "Candidate relates to an active systemd service/process"
+            return c
+        # Nur echt als deprecated markierte Pfade
+        if not any(prefix in c.path for prefix in ("_DEPRECATED_", "_archive", "codex_backup_", "legal_mac_pull_", "_backups")):
+            c.risk_class = "ask_maurice"
+            c.action = "ask"
+            c.confidence = 0.85
+            c.evidence = "Deprecated candidate is not in a known safe archive prefix"
+            return c
         c.risk_class = "safe_archive"
         c.action = "archive_to_backup"
         c.confidence = 0.85
-        c.evidence = f"Backup/deprecated object older than threshold ({c.age_days:.1f} days)"
+        c.evidence = f"Backup/deprecated object in safe archive prefix ({c.age_days:.1f} days)"
         return c
 
     if c.category == "log" and c.age_days > 7:
@@ -298,7 +343,7 @@ def propose_actions(candidates: list[Candidate]) -> list[Path]:
 def create_telegram_approval_proposal(c: Candidate) -> Path:
     name = f"housekeep-ask-{c.category}-{Path(c.path).name[:30]}"
     body = f"""---
-status: vorgeschlagen
+status: telegram_approval
 loop: {name}
 erstellt: durch hecate.system_housekeeper
 telegram_approval: required

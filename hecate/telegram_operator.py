@@ -192,6 +192,35 @@ class TelegramOperator:
                 lines.append(f"• {p['name']}")
             return self._send(chat_id, "\n".join(lines))
 
+        if cmd in ("/approve", "/deny"):
+            proposal_id = arg.strip()
+            if not proposal_id:
+                return self._send(chat_id, "Bitte Proposal-ID angeben: /approve <name>")
+            status = "approved" if cmd == "/approve" else "rejected"
+            ok = self._set_proposal_status(proposal_id, status)
+            if not ok:
+                return self._send(chat_id, f"❌ Proposal {proposal_id} nicht gefunden.")
+            if status == "approved":
+                self._send(chat_id, f"✅ {proposal_id} freigegeben. HECATE fuehrt es im naechsten Loop aus.")
+            else:
+                self._send(chat_id, f"❌ {proposal_id} abgelehnt.")
+            return
+
+        if cmd == "/approve-all":
+            from hecate.proposal_notifier import mark_all
+            changed = mark_all("approved")
+            return self._send(chat_id, f"✅ {len(changed)} Proposals freigegeben. Naechster Loop setzt sie um.")
+
+        if cmd == "/deny-all":
+            from hecate.proposal_notifier import mark_all
+            changed = mark_all("rejected")
+            return self._send(chat_id, f"❌ {len(changed)} Proposals abgelehnt.")
+
+        if cmd == "/skip-all":
+            from hecate.proposal_notifier import mark_all
+            changed = mark_all("vorgeschlagen")
+            return self._send(chat_id, f"⏭ {len(changed)} Proposals auf vorgeschlagen zurueckgesetzt. Heute keine weiteren Erinnerungen.")
+
         # Unbekannter Slash → als Prompt behandeln
         return self.handle(chat_id, text=cmd + " " + arg)
 
@@ -291,9 +320,26 @@ class TelegramOperator:
             m = re.search(r'status:\s*(\w+)', text)
             if m:
                 status = m.group(1)
-            if status == "vorgeschlagen":
-                out.append({"name": p.name, "path": str(p)})
+            if status in ("vorgeschlagen", "telegram_approval"):
+                out.append({"name": p.name, "path": str(p), "status": status})
         return out
+
+    def _set_proposal_status(self, proposal_id: str, status: str) -> bool:
+        proposals = Path("/root/projects/loop-master/proposals")
+        path = proposals / f"{proposal_id}.md"
+        if not path.exists():
+            # Versuche mit zusaetzlicher Nummerierung
+            matches = list(proposals.glob(f"{proposal_id}*.md"))
+            if not matches:
+                return False
+            path = matches[0]
+        text = path.read_text(encoding="utf-8", errors="replace")
+        new_text = re.sub(r'status:\s*\w+', f'status: {status}', text)
+        if new_text == text:
+            # Fuege status Zeile nach dem Frontmatter-Start ein
+            new_text = "---\nstatus: " + status + "\n" + text.lstrip("-").lstrip()
+        path.write_text(new_text, encoding="utf-8")
+        return True
 
     def _help_text(self) -> str:
         return (

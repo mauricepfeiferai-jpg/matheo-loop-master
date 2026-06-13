@@ -1,5 +1,5 @@
 ---
-status: vorgeschlagen
+status: telegram_approval
 loop: housekeep-ask-large_dir-.codex.old.20260522_223846
 erstellt: durch hecate.system_housekeeper
 telegram_approval: required
