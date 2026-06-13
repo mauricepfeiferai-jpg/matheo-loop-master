@@ -45,13 +45,15 @@ class ModelConfig:
 
 
 # Lokale Modelle, die auf dem Server verfuegbar sind.
+# AUF DEM HETZNER: CPU-only, 12 Cores, 125 GB RAM.
+# Regel: schnelle kleine Modelle zuerst, große nur bei Bedarf.
 DEFAULT_MODELS: dict[TaskType, ModelConfig] = {
-    TaskType.CLASSIFY:    ModelConfig("qwen2.5:1.5b", context_length=32000, timeout=60),
-    TaskType.CODE_ANALYZE: ModelConfig("qwen2.5-coder:7b", context_length=32000, timeout=180),
-    TaskType.REASON:      ModelConfig("qwen3:8b", context_length=32000, timeout=240),
+    TaskType.CLASSIFY:    ModelConfig("qwen2.5:1.5b", context_length=16000, timeout=60),
+    TaskType.CODE_ANALYZE: ModelConfig("qwen2.5-coder:7b", context_length=16000, timeout=120),
+    TaskType.REASON:      ModelConfig("qwen2.5:1.5b", context_length=16000, timeout=90),
     TaskType.EMBED:       ModelConfig("nomic-embed-text", context_length=8192, timeout=30),
-    TaskType.VERIFY:      ModelConfig("qwen2.5-coder:7b", context_length=32000, timeout=120),
-    TaskType.VISION:      ModelConfig("qwen3:8b", context_length=32000, timeout=300),
+    TaskType.VERIFY:      ModelConfig("qwen2.5-coder:7b", context_length=16000, timeout=90),
+    TaskType.VISION:      ModelConfig("qwen2.5-coder:7b", context_length=16000, timeout=120),
 }
 
 OLLAMA_HOST = "http://127.0.0.1:11434"

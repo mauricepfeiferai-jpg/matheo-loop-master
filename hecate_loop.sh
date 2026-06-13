@@ -87,6 +87,12 @@ python3 "$BASE/hecate/proposal_notifier.py" >> "$LOG" 2>&1
 # ── 10. Freigegebene Housekeeping-Proposals ausfuehren (nur safe Klassen) ──
 python3 "$BASE/hecate/housekeeping_worker.py" --apply-approved >> "$LOG" 2>&1
 
+# ── 11. Autonomie-Loop: HECATE erzeugt Verbesserungsvorschlag (nur Proposal) ──
+python3 "$BASE/hecate/autonomy_loop.py" >> "$LOG" 2>&1
+
+# ── 12. Decision Card Loop: Findings → hochwertige Decision Cards ──
+python3 "$BASE/hecate/decision_card_loop.py" >> "$LOG" 2>&1
+
 # ── 7. Kein Telegram-Spam mehr ──
 # Roh-Findings werden lokal geloggt und in Reports verdichtet.
 # Telegram sendet nur noch echte Entscheidungs-Proposals (siehe hecate/proposal_bot.py).
