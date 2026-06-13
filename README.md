@@ -2,6 +2,14 @@
 
 Safety-Fundament fuer den Executive Loop. Jede autonome Auto-Aktion laeuft durch safety.harness.run().
 
+**2026-06-13:** `/root/projects/loop-master` ist kanonischer HECATE-Master. Altes `/root/hecate`
+v1 und `/root/loop_kernel` sind pausiert — siehe [`ARCHIVE_old_hecate.md`](./ARCHIVE_old_hecate.md).
+Migration der pausierten Funktionen erfolgt als gated Proposals in `proposals/`.
+
+**2026-06-13:** `/root/projects/loop-master` ist kanonischer HECATE-Master. Altes `/root/hecate`
+v1 und `/root/loop_kernel` sind pausiert — siehe [`ARCHIVE_old_hecate.md`](./ARCHIVE_old_hecate.md).
+Migration der pausierten Funktionen erfolgt als gated Proposals in `proposals/`.
+
 ## Nutzung
 ```python
 from safety.harness import SafeAction, run

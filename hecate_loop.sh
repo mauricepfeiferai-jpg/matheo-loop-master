@@ -40,23 +40,25 @@ wf.run()
 " >> "$LOG" 2>&1
 
 # ── 6. STATE.md aktualisieren (Open failures + Last session) ──
-python3 -c "
-import sys; sys.path.insert(0, '$BASE')
-from hecate.state_file import StateFile
-import json
+KRIT="$KRIT" HOCH="$HOCH" python3 -c "
+import os, sys, json
+from datetime import datetime, timezone
 from pathlib import Path
+sys.path.insert(0, '$BASE')
+from hecate.state_file import StateFile
 
 state = StateFile.load()
 
 # Open failures aus dem Bus extrahieren
 bus = Path('/var/lib/loop-master/findings.jsonl')
+today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 if bus.exists():
     open_items = []
     for line in bus.open():
         if not line.strip(): continue
         try:
             f = json.loads(line)
-            if f.get('severity') in ('krit','hoch') and f.get('ts','').startswith('$(date +%Y-%m-%d)'):
+            if f.get('severity') in ('krit','hoch') and f.get('ts','').startswith(today):
                 open_items.append(f'{f.get(\"sensor\",\"?\")}: {f.get(\"subject\",\"-\")[:60]}')
         except Exception:
             pass
@@ -66,10 +68,13 @@ if bus.exists():
             state = state.add_open_failure(item)
 
 # Last session aktualisieren
-last = f'$(date +%Y-%m-%d %H:%M) UTC — Loop: {KRIT} krit / {HOCH} hoch. Skills aktualisiert. Workflow health_check ausgefuehrt.'
+now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')
+krit = os.environ['KRIT']
+hoch = os.environ['HOCH']
+last = f'{now} UTC — Loop: {krit} krit / {hoch} hoch. Skills aktualisiert. Workflow health_check ausgefuehrt.'
 state = state.set_last_session(last)
 state.save()
-print(f'STATE.md aktualisiert: {KRIT} krit / {HOCH} hoch')
+print(f'STATE.md aktualisiert: {krit} krit / {hoch} hoch')
 " >> "$LOG" 2>&1
 
 # ── 7. Alert wenn nötig ──
