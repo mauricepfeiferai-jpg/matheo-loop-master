@@ -23,21 +23,22 @@ PROMPTS = {
 }
 
 # Modelle, die auf dem Server verfuegbar sind. Prioritaet: schnell > qualitativ.
+# Minimaler Benchmark: schnellste Modelle, kurze Prompts.
 MODELS = {
     TaskType.CLASSIFY: [
         ("qwen2.5:1.5b", 60),
     ],
     TaskType.CODE_ANALYZE: [
-        ("qwen2.5-coder:7b", 120),
+        ("qwen2.5:1.5b", 90),
     ],
     TaskType.REASON: [
         ("qwen2.5:1.5b", 90),
     ],
     TaskType.VERIFY: [
-        ("qwen2.5-coder:7b", 120),
+        ("qwen2.5:1.5b", 90),
     ],
     TaskType.VISION: [
-        ("qwen2.5-coder:7b", 180),
+        ("qwen2.5:1.5b", 90),
     ],
 }
 
