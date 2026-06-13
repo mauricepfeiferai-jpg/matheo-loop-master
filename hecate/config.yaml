@@ -50,12 +50,15 @@ escalation:
   default_channel: telegram
   channels:
     - telegram
+    - cmux
     - email
   severity_map:
-    krit: telegram
-    hoch: telegram
-    mittel: telegram
+    krit: cmux
+    hoch: cmux
+    mittel: cmux
     info: log_only
+  cmux:
+    enabled: true
 
 agent_team:
   max_workers: 3

@@ -10,6 +10,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from hecate.cmux_adapter import send_notification as send_cmux_notification
 from hecate.hermes_adapter import send_message
 from hecate.rate_limiter import can_send_telegram, telegram_wait
 
@@ -21,9 +22,9 @@ TELEGRAM_F_CLASSES = {"proposal", "governance"}
 
 # Weiterhin Telegram-faehig, aber vom Proposal-Bot verwaltet.
 SEVERITY_MAP = {
-    "krit": ["log"],
-    "hoch": ["log"],
-    "mittel": ["log"],
+    "krit": ["cmux", "log"],
+    "hoch": ["cmux", "log"],
+    "mittel": ["cmux", "log"],
     "info": ["log"],
 }
 
@@ -41,6 +42,8 @@ def route_finding(finding: dict) -> list:
     for ch in channels:
         if ch == "telegram" and _is_telegram_finding(finding):
             results.append(_send_telegram(finding))
+        elif ch == "cmux":
+            results.append(_send_cmux(finding))
         elif ch == "log":
             results.append(_send_log(finding))
     return results
@@ -60,6 +63,17 @@ def _send_telegram(finding: dict) -> dict:
         return {"channel": "telegram", "ok": r.ok, "output": r.stdout[:100]}
     except Exception as e:
         return {"channel": "telegram", "ok": False, "error": str(e)}
+
+
+def _send_cmux(finding: dict) -> dict:
+    """Sendet cmux-Benachrichtigung (OSC + Log)."""
+    ok = send_cmux_notification(
+        finding.get("severity", "info"),
+        finding.get("subject", "—"),
+        finding.get("evidence", ""),
+        finding.get("suggested_fix", ""),
+    )
+    return {"channel": "cmux", "ok": ok}
 
 
 def _send_log(finding: dict) -> dict:

@@ -2,6 +2,7 @@
 # Hecate 100X Loop — Proaktiver Agent mit Auto-Remediation + Workflows + STATE.md
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 BASE="/root/projects/loop-master"
+export PYTHONPATH="$BASE"
 LOG="/var/log/hecate_loop.log"
 TS=$(date '+%F %T')
 echo "$TS === 100X Loop Start ===" >> "$LOG"

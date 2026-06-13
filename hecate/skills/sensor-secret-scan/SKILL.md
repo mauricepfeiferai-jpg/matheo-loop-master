@@ -36,3 +36,4 @@ Regex-basierte Suche nach Token-Mustern in Dateien, mit Perm-Check (world-readab
 ## Known Issues
 
 - secret.plaintext-env: Aufgetreten 21x. Prüfe vor jeder Ausführung.
+- secret.cron-env-token: Aufgetreten 9x. Prüfe vor jeder Ausführung.
