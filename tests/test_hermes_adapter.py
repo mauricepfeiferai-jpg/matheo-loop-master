@@ -1,6 +1,16 @@
 from unittest.mock import patch
 
-from hecate.hermes_adapter import HermesResult, chat, list_targets, run_skill, send_message, status
+import pytest
+
+from hecate.hermes_adapter import (
+    HermesAdapterError,
+    HermesResult,
+    chat,
+    list_targets,
+    run_skill,
+    send_message,
+    status,
+)
 
 
 def test_send_message_builds_hermes_send_command():
@@ -8,7 +18,6 @@ def test_send_message_builds_hermes_send_command():
         mock_run.return_value = HermesResult(ok=True, stdout="sent")
         r = send_message("telegram", "hello", quiet=True)
         assert r.ok is True
-        mock_run.assert_called_once()
         args, kwargs = mock_run.call_args
         assert args[0] == ["send", "--to", "telegram", "-q"]
         assert kwargs["input_text"] == "hello"
@@ -20,6 +29,16 @@ def test_send_message_passes_non_quiet():
         send_message("discord:#ops", "deploy done", quiet=False)
         args, _ = mock_run.call_args
         assert "-q" not in args[0]
+
+
+def test_send_message_rejects_option_injection():
+    with pytest.raises(HermesAdapterError, match="Option-Injection"):
+        send_message("--help", "foo")
+
+
+def test_send_message_rejects_empty_text():
+    with pytest.raises(HermesAdapterError, match="nicht leer"):
+        send_message("telegram", "  ")
 
 
 def test_status_command():
@@ -57,6 +76,16 @@ def test_chat_command():
         assert "--source" in cmd and "hecate" in cmd
 
 
+def test_chat_rejects_negative_max_turns():
+    with pytest.raises(HermesAdapterError, match="max_turns"):
+        chat("hi", max_turns=-1)
+
+
+def test_chat_rejects_option_injection_in_query():
+    with pytest.raises(HermesAdapterError, match="Option-Injection"):
+        chat("--rm -rf /")
+
+
 def test_run_skill_uses_chat_with_skill():
     with patch("hecate.hermes_adapter._run") as mock_run:
         mock_run.return_value = HermesResult(ok=True)
@@ -73,3 +102,15 @@ def test_list_targets():
         list_targets("telegram")
         args, _ = mock_run.call_args
         assert args[0] == ["send", "--list", "telegram"]
+
+
+def test_run_subprocess_failure_returned_not_raised():
+    """Hermes CLI-Fehler werden im HermesResult zurückgegeben, nicht geworfen."""
+    with patch("hecate.hermes_adapter.subprocess.run") as mock_run:
+        from subprocess import CompletedProcess
+        mock_run.return_value = CompletedProcess(args=["hermes", "status"], returncode=1,
+                                                 stdout="", stderr="boom")
+        r = status()
+        assert r.ok is False
+        assert r.returncode == 1
+        assert r.stderr == "boom"

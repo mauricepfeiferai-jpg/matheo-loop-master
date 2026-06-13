@@ -2,29 +2,38 @@
 
 Wird vom Proposal `hermes-agent-integration` verwendet, sobald freigegeben.
 """
-import json
+import traceback
 from datetime import datetime, timezone
-from pathlib import Path
 
 from hecate.hermes_adapter import status
+from sensors.bus import Finding, emit
 
-BUS = Path("/var/lib/loop-master/findings.jsonl")
+
+def _build_finding(ok: bool, evidence: str) -> Finding:
+    return Finding(
+        sensor="hermes_adapter",
+        severity="info" if ok else "hoch",
+        f_class="hermes.status_ok" if ok else "hermes.status_failed",
+        subject="Hermes Agent Status",
+        evidence=evidence[:200],
+        suggested_fix="" if ok else "Hermes CLI/Netz prüfen; `hermes doctor` ausführen",
+        ts=datetime.now(timezone.utc).isoformat(),
+    )
 
 
 def main() -> int:
-    r = status()
-    finding = {
-        "sensor": "hermes_adapter",
-        "severity": "info" if r.ok else "hoch",
-        "f_class": "hermes.status_ok" if r.ok else "hermes.status_failed",
-        "subject": "Hermes Agent Status",
-        "evidence": (r.stdout[:200] if r.ok else (r.stderr[:200] or f"exit {r.returncode}")) or "no output",
-        "ts": datetime.now(timezone.utc).isoformat(),
-    }
-    with BUS.open("a") as f:
-        f.write(json.dumps(finding, ensure_ascii=False) + "\n")
-    print(f"Hermes status: {'ok' if r.ok else 'failed'} (exit {r.returncode})")
-    return 0 if r.ok else 1
+    try:
+        r = status()
+        evidence = (r.stdout[:200] if r.ok else (r.stderr[:200] or f"exit {r.returncode}")) or "no output"
+        finding = _build_finding(r.ok, evidence)
+        returncode = 0 if r.ok else 1
+    except Exception as exc:
+        finding = _build_finding(False, f"{type(exc).__name__}: {exc}\n{traceback.format_exc()[:200]}")
+        returncode = 1
+
+    emit([finding])
+    print(f"Hermes status: {'ok' if finding.f_class == 'hermes.status_ok' else 'failed'}")
+    return returncode
 
 
 if __name__ == "__main__":

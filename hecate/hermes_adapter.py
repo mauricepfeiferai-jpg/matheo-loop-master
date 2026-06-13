@@ -6,11 +6,6 @@ ueber safety.harness gehen.
 """
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
-
-
-class HermesError(Exception):
-    """Hermes CLI lieferte Exit != 0 oder Timeout."""
 
 
 @dataclass(frozen=True)
@@ -19,6 +14,28 @@ class HermesResult:
     stdout: str = ""
     stderr: str = ""
     returncode: int = 0
+
+
+class HermesAdapterError(Exception):
+    """Ungueltige Argumente oder unerwarteter Hermes-Fehler."""
+
+
+_MAX_ARG_LEN = 4000
+_MAX_TURNS = 200
+
+
+def _safe_arg(value: str, name: str) -> str:
+    """Prüft ein Argument gegen Option-Injection und Laengen-Grenzen."""
+    if not isinstance(value, str):
+        raise HermesAdapterError(f"{name} muss String sein, war {type(value).__name__}")
+    stripped = value.strip()
+    if not stripped:
+        raise HermesAdapterError(f"{name} darf nicht leer sein")
+    if stripped.startswith("-"):
+        raise HermesAdapterError(f"{name} beginnt mit '-' (Option-Injection verweigert)")
+    if len(stripped) > _MAX_ARG_LEN:
+        raise HermesAdapterError(f"{name} zu lang ({len(stripped)} > {_MAX_ARG_LEN})")
+    return stripped
 
 
 def _run(args: list[str], timeout: int = 120, input_text: str | None = None) -> HermesResult:
@@ -38,12 +55,13 @@ def send_message(target: str, text: str, quiet: bool = True) -> HermesResult:
 
     target: z.B. 'telegram', 'telegram:-1001234567890', 'discord:#ops'
     """
+    target = _safe_arg(target, "target")
+    text = _safe_arg(text, "text")
     args = ["send", "--to", target]
     if quiet:
         args.append("-q")
     # hermes send akzeptiert entweder positional message, -f file oder stdin
-    r = _run(args, timeout=60, input_text=text)
-    return r
+    return _run(args, timeout=60, input_text=text)
 
 
 def status(deep: bool = False) -> HermesResult:
@@ -63,17 +81,20 @@ def chat(query: str, model: str | None = None, skills: list[str] | None = None,
     Subprozess, nicht im safety.harness. Für destruktive/file-schreibende
     Aktionen muss der Aufrufer selbst safety.harness.run() verwenden.
     """
+    query = _safe_arg(query, "query")
     args = ["chat", "-q", query]
-    if model:
-        args.extend(["-m", model])
+    if model is not None:
+        args.extend(["-m", _safe_arg(model, "model")])
     if skills:
-        args.extend(["-s", ",".join(skills)])
+        args.extend(["-s", ",".join(_safe_arg(s, "skill") for s in skills)])
     if toolsets:
-        args.extend(["-t", ",".join(toolsets)])
+        args.extend(["-t", ",".join(_safe_arg(t, "toolset") for t in toolsets)])
+    if not isinstance(max_turns, int) or not (1 <= max_turns <= _MAX_TURNS):
+        raise HermesAdapterError(f"max_turns muss 1..{_MAX_TURNS} sein, war {max_turns!r}")
     args.extend(["--max-turns", str(max_turns)])
     if quiet:
         args.append("-Q")
-    args.extend(["--source", source])
+    args.extend(["--source", _safe_arg(source, "source")])
     return _run(args, timeout=300)
 
 
@@ -85,6 +106,6 @@ def run_skill(skill_name: str, query: str, model: str | None = None) -> HermesRe
 def list_targets(platform: str | None = None) -> HermesResult:
     """Verfuegbare Hermes Send-Targets auflisten."""
     args = ["send", "--list"]
-    if platform:
-        args.append(platform)
+    if platform is not None:
+        args.append(_safe_arg(platform, "platform"))
     return _run(args, timeout=30)

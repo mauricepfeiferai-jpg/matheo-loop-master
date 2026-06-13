@@ -4,11 +4,11 @@
 Schließt Lücke #16: Kein Escalation-Routing.
 """
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 from hecate.hermes_adapter import send_message
+from hecate.rate_limiter import can_send_telegram, telegram_wait
 
 BUS = Path("/var/lib/loop-master/findings.jsonl")
 
@@ -34,9 +34,18 @@ def route_finding(finding: dict) -> list:
 
 
 def _send_telegram(finding: dict) -> dict:
-    """Sendet via Hermes Adapter (HECATE integriert Hermes als Messaging-Schicht)."""
+    """Sendet via Hermes Adapter (HECATE integriert Hermes als Messaging-Schicht).
+
+    Rate-limited: bei Ueberlastung wird der Alert ins Log geschrieben und spaeter
+    im Tagesreport gebündelt, statt Telegram zu spammen.
+    """
     icon = {"krit": "🔴", "hoch": "🟠", "mittel": "🟡", "info": "🔵"}.get(finding["severity"], "⚪")
     msg = f"{icon} [{finding.get('sensor', '?')}] {finding.get('subject', '—')}\n{finding.get('evidence', '')[:200]}"
+    if not can_send_telegram():
+        wait = telegram_wait()
+        _send_log({**finding, "_throttled": True,
+                   "_note": f"Telegram rate-limit aktiv; wartet {wait:.0f}s"})
+        return {"channel": "telegram", "ok": False, "error": f"rate-limited: wait {wait:.0f}s"}
     try:
         r = send_message("telegram", msg, quiet=True)
         return {"channel": "telegram", "ok": r.ok, "output": r.stdout[:100]}
@@ -64,8 +73,14 @@ def process_bus(limit: int = 10) -> list:
     findings = []
     with open(BUS) as f:
         for line in f:
-            if line.strip():
+            line = line.strip()
+            if not line:
+                continue
+            try:
                 findings.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                _send_log({"sensor": "escalation", "severity": "hoch",
+                           "subject": "Bus JSON decode error", "evidence": str(exc)[:120]})
     results = []
     for f in findings[-limit:]:
         if f.get("severity") in ("krit", "hoch"):
