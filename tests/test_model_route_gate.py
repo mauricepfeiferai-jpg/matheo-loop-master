@@ -7,11 +7,27 @@ from hecate.model_route_gate import ModelRouteGate, RouteDecision
 from hecate.reasoning_router import ReasoningRouter, TaskType
 
 
+def _patch_ollama_manager(monkeypatch):
+    monkeypatch.setattr(
+        "hecate.ollama_manager.prepare_for_model",
+        lambda name: {
+            "model": name,
+            "requested_model": name,
+            "unloaded": False,
+            "memory_ok": True,
+            "available_gb": 80.0,
+        },
+    )
+    monkeypatch.setattr("hecate.ollama_manager.ensure_only_model_loaded", lambda name: False)
+
+
 def test_decide_local_when_ollama_alive(tmp_path, monkeypatch):
     router = MagicMock(spec=ReasoningRouter)
     router.is_ollama_alive.return_value = True
     router.models = {TaskType.REASON: MagicMock(name="qwen2.5:1.5b")}
+    router.models[TaskType.REASON].name = "qwen2.5:1.5b"
 
+    _patch_ollama_manager(monkeypatch)
     gate = ModelRouteGate(router=router, db_path=tmp_path / "route.db", cloud_enabled=False)
     d = gate.decide("reason")
     assert d.provider == "ollama"
@@ -22,8 +38,10 @@ def test_decide_cloud_when_ollama_dead(tmp_path, monkeypatch):
     router = MagicMock(spec=ReasoningRouter)
     router.is_ollama_alive.return_value = False
     router.models = {TaskType.REASON: MagicMock(name="qwen2.5:1.5b")}
+    router.models[TaskType.REASON].name = "qwen2.5:1.5b"
 
     monkeypatch.setattr("hecate.model_route_gate.load_config", lambda: {})
+    _patch_ollama_manager(monkeypatch)
     gate = ModelRouteGate(router=router, db_path=tmp_path / "route.db", cloud_enabled=True)
     d = gate.decide("reason")
     assert d.provider == "claude"
@@ -34,8 +52,10 @@ def test_cloud_required_tasks_go_cloud(tmp_path, monkeypatch):
     router = MagicMock(spec=ReasoningRouter)
     router.is_ollama_alive.return_value = True
     router.models = {TaskType.VISION: MagicMock(name="qwen2.5-coder:7b")}
+    router.models[TaskType.VISION].name = "qwen2.5-coder:7b"
 
     monkeypatch.setattr("hecate.model_route_gate.load_config", lambda: {})
+    _patch_ollama_manager(monkeypatch)
     gate = ModelRouteGate(router=router, db_path=tmp_path / "route.db", cloud_enabled=False)
     d = gate.decide("vision")
     assert d.provider == "claude"
@@ -46,6 +66,7 @@ def test_force_local_overrides_cloud_required(tmp_path):
     router = MagicMock(spec=ReasoningRouter)
     router.is_ollama_alive.return_value = True
     router.models = {TaskType.VISION: MagicMock(name="qwen2.5-coder:7b")}
+    router.models[TaskType.VISION].name = "qwen2.5-coder:7b"
 
     gate = ModelRouteGate(router=router, db_path=tmp_path / "route.db", cloud_enabled=False)
     d = gate.decide("vision", force_local=True)
@@ -57,8 +78,10 @@ def test_failures_exceeded_triggers_cloud_fallback(tmp_path, monkeypatch):
     router = MagicMock(spec=ReasoningRouter)
     router.is_ollama_alive.return_value = True
     router.models = {TaskType.REASON: MagicMock(name="qwen2.5:1.5b")}
+    router.models[TaskType.REASON].name = "qwen2.5:1.5b"
 
     monkeypatch.setattr("hecate.model_route_gate.load_config", lambda: {})
+    _patch_ollama_manager(monkeypatch)
     gate = ModelRouteGate(router=router, db_path=tmp_path / "route.db", cloud_enabled=True)
     # 3 fehlgeschlagene Laeufe loggen
     for _ in range(3):
@@ -77,6 +100,7 @@ def test_log_and_stats(tmp_path):
     router = MagicMock(spec=ReasoningRouter)
     router.is_ollama_alive.return_value = True
     router.models = {TaskType.REASON: MagicMock(name="qwen2.5:1.5b")}
+    router.models[TaskType.REASON].name = "qwen2.5:1.5b"
 
     gate = ModelRouteGate(router=router, db_path=tmp_path / "route.db")
     gate.log_attempt(
@@ -93,13 +117,14 @@ def test_log_and_stats(tmp_path):
     assert stats["success_rate"] == 1.0
 
 
-def test_run_success_logs_and_returns_response(tmp_path):
+def test_run_success_logs_and_returns_response(tmp_path, monkeypatch):
     router = MagicMock(spec=ReasoningRouter)
     router.is_ollama_alive.return_value = True
     router.models = {TaskType.REASON: MagicMock(name="qwen2.5:1.5b")}
     router.models[TaskType.REASON].name = "qwen2.5:1.5b"
     router.generate.return_value = "local model response"
 
+    _patch_ollama_manager(monkeypatch)
     gate = ModelRouteGate(router=router, db_path=tmp_path / "route.db")
     result = gate.run("reason", "hello")
     assert result["success"] is True
@@ -107,7 +132,7 @@ def test_run_success_logs_and_returns_response(tmp_path):
     assert result["decision"]["provider"] == "ollama"
 
 
-def test_run_failure_logs_and_returns_error(tmp_path):
+def test_run_failure_logs_and_returns_error(tmp_path, monkeypatch):
     router = MagicMock(spec=ReasoningRouter)
     router.is_ollama_alive.return_value = True
     router.models = {TaskType.REASON: MagicMock(name="qwen2.5:1.5b")}
@@ -115,6 +140,7 @@ def test_run_failure_logs_and_returns_error(tmp_path):
     from hecate.reasoning_router import ReasoningError
     router.generate.side_effect = ReasoningError("timeout")
 
+    _patch_ollama_manager(monkeypatch)
     gate = ModelRouteGate(router=router, db_path=tmp_path / "route.db")
     result = gate.run("reason", "hello")
     assert result["success"] is False

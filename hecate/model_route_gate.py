@@ -17,6 +17,7 @@ from typing import Optional
 
 from hecate.reasoning_router import ReasoningRouter, ReasoningError, TaskType
 from hecate.config import load_config
+from hecate import ollama_manager
 
 ROUTE_DB_PATH = Path("/var/lib/loop-master/model_route.db")
 
@@ -142,6 +143,23 @@ class ModelRouteGate:
             )
 
         local_model = self.router.models[TaskType(task_type)].name
+
+        # Vor dem lokalen Aufruf: sicherstellen, dass genug Speicher frei ist
+        # und moeglichst nur ein Modell geladen ist.
+        try:
+            prep = ollama_manager.prepare_for_model(local_model)
+            if prep["model"] != local_model:
+                # Fallback auf kleineres Modell
+                return RouteDecision(
+                    model=prep["model"],
+                    provider="ollama",
+                    reason=f"memory_fallback (requested {local_model})",
+                    estimated_cost_usd=0.0,
+                )
+        except ollama_manager.OllamaError:
+            # Wenn Ollama nicht erreichbar ist, koennen wir trotzdem versuchen
+            pass
+
         return RouteDecision(
             model=local_model,
             provider="ollama",
@@ -198,6 +216,9 @@ class ModelRouteGate:
 
         if decision.provider == "ollama":
             try:
+                # Sicherstellen, dass nur das Zielmodell geladen ist.
+                # Das verhindert Timeouts durch konkurrierende grosse Modelle.
+                ollama_manager.ensure_only_model_loaded(decision.model)
                 response = self.router.generate(TaskType(task_type), prompt, context)
                 success = True
             except ReasoningError as exc:
