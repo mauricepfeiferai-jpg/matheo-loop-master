@@ -11,6 +11,7 @@ from pathlib import Path
 
 from sensors.bus import BUS_PATH
 from hecate.loop_factory import PROPOSALS_DIR
+from hecate.knowledge_gold import enrich_research_brief, sync_gold_db
 
 BRIEF_PATH = Path("/var/lib/loop-master/research_brief.md")
 
@@ -59,7 +60,13 @@ def build_brief(bus_path: Path = BUS_PATH, proposals_dir: Path = PROPOSALS_DIR) 
 
 
 def main() -> int:
-    brief = build_brief()
+    brief_lines = build_brief().splitlines()
+    try:
+        sync_gold_db()
+        brief_lines = enrich_research_brief(brief_lines)
+    except FileNotFoundError:
+        pass  # Blackhole DB nicht vorhanden -> Brief ohne Gold-Sektion
+    brief = "\n".join(brief_lines) + "\n"
     BRIEF_PATH.parent.mkdir(parents=True, exist_ok=True)
     BRIEF_PATH.write_text(brief)
     print(brief)
