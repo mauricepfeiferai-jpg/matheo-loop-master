@@ -20,10 +20,8 @@ python3 "$BASE/hecate_bridge.py" findings 10 > /tmp/hecate_latest.txt 2>> "$LOG"
 KRIT=$(grep -c "🔴" /tmp/hecate_latest.txt 2>/dev/null | head -1 || echo 0)
 HOCH=$(grep -c "🟠" /tmp/hecate_latest.txt 2>/dev/null | head -1 || echo 0)
 
-# ── 3. Auto-Remediation bei bekannten Problemen ──
-if [ "$KRIT" -gt 0 ] || [ "$HOCH" -gt 0 ]; then
-    python3 "$BASE/hecate/auto_remediate.py" >> "$LOG" 2>&1
-fi
+# ── 3. Auto-Remediation ist DEAKTIVIERT (Proposal-only Modus) ──
+python3 "$BASE/hecate/auto_remediate.py" >> "$LOG" 2>&1
 
 # ── 4. Self-Improvement (Skills aktualisieren) ──
 python3 "$BASE/hecate/self_improvement.py" >> "$LOG" 2>&1
@@ -77,10 +75,9 @@ state.save()
 print(f'STATE.md aktualisiert: {krit} krit / {hoch} hoch')
 " >> "$LOG" 2>&1
 
-# ── 7. Alert wenn nötig ──
-if [ "$KRIT" -gt 0 ] || [ "$HOCH" -gt 0 ]; then
-    MSG="🔴/🟠 Hecate Alert: $KRIT kritisch + $HOCH hoch. Auto-Remediation wurde versucht. Soll ich Details schicken oder Sensoren triggern?"
-    hermes send --to telegram "$MSG" 2>> "$LOG"
-fi
+# ── 7. Kein Telegram-Spam mehr ──
+# Roh-Findings werden lokal geloggt und in Reports verdichtet.
+# Telegram sendet nur noch echte Entscheidungs-Proposals (siehe hecate/proposal_bot.py).
+# Kritische Zustaende sind jederzeit ueber /status und /sensors abfragbar.
 
 echo "$TS === 100X Loop Done (krit=$KRIT hoch=$HOCH) ===" >> "$LOG"

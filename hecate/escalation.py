@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Escalation Router — verteilt Alerts auf Kanäle nach Severity.
+"""Escalation Router — Proposal-only Telegram-Ausgabe.
 
-Schließt Lücke #16: Kein Escalation-Routing.
+- Findings werden in /var/log/loop-master/escalation.jsonl geloggt.
+- Telegram wird nur noch fuer echte Entscheidungs-Proposals verwendet
+  (f_class in TELEGRAM_F_CLASSES) oder vom Proposal-Bot gesteuert.
+- Alle anderen Alerts (krit/hoch) landen im Report, nicht im Chat.
 """
 import json
 from datetime import datetime, timezone
@@ -12,21 +15,31 @@ from hecate.rate_limiter import can_send_telegram, telegram_wait
 
 BUS = Path("/var/lib/loop-master/findings.jsonl")
 
+# Nur diese Finding-Typen duerfen direkt an Telegram gehen.
+# Alles andere wird nur noch geloggt.
+TELEGRAM_F_CLASSES = {"proposal", "governance"}
+
+# Weiterhin Telegram-faehig, aber vom Proposal-Bot verwaltet.
 SEVERITY_MAP = {
-    "krit": ["telegram", "log"],
-    "hoch": ["telegram", "log"],
+    "krit": ["log"],
+    "hoch": ["log"],
     "mittel": ["log"],
     "info": ["log"],
 }
 
 
+def _is_telegram_finding(finding: dict) -> bool:
+    f_class = finding.get("f_class", "")
+    return any(f_class.startswith(prefix + ".") for prefix in TELEGRAM_F_CLASSES)
+
+
 def route_finding(finding: dict) -> list:
-    """Bestimmt Zielkanäle für ein Finding."""
+    """Bestimmt Zielkanäle fuer ein Finding."""
     sev = finding.get("severity", "info")
     channels = SEVERITY_MAP.get(sev, ["log"])
     results = []
     for ch in channels:
-        if ch == "telegram":
+        if ch == "telegram" and _is_telegram_finding(finding):
             results.append(_send_telegram(finding))
         elif ch == "log":
             results.append(_send_log(finding))
@@ -34,11 +47,7 @@ def route_finding(finding: dict) -> list:
 
 
 def _send_telegram(finding: dict) -> dict:
-    """Sendet via Hermes Adapter (HECATE integriert Hermes als Messaging-Schicht).
-
-    Rate-limited: bei Ueberlastung wird der Alert ins Log geschrieben und spaeter
-    im Tagesreport gebündelt, statt Telegram zu spammen.
-    """
+    """Sendet via Hermes Adapter NUR fuer Proposal/Governance-Findings."""
     icon = {"krit": "🔴", "hoch": "🟠", "mittel": "🟡", "info": "🔵"}.get(finding["severity"], "⚪")
     msg = f"{icon} [{finding.get('sensor', '?')}] {finding.get('subject', '—')}\n{finding.get('evidence', '')[:200]}"
     if not can_send_telegram():
@@ -83,7 +92,7 @@ def process_bus(limit: int = 10) -> list:
                            "subject": "Bus JSON decode error", "evidence": str(exc)[:120]})
     results = []
     for f in findings[-limit:]:
-        if f.get("severity") in ("krit", "hoch"):
+        if f.get("severity") in ("krit", "hoch") or _is_telegram_finding(f):
             results.extend(route_finding(f))
     return results
 
