@@ -5,9 +5,10 @@ Schließt Lücke #16: Kein Escalation-Routing.
 """
 import json
 import os
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+
+from hecate.hermes_adapter import send_message
 
 BUS = Path("/var/lib/loop-master/findings.jsonl")
 
@@ -33,15 +34,12 @@ def route_finding(finding: dict) -> list:
 
 
 def _send_telegram(finding: dict) -> dict:
-    """Sendet via hermes CLI."""
+    """Sendet via Hermes Adapter (HECATE integriert Hermes als Messaging-Schicht)."""
     icon = {"krit": "🔴", "hoch": "🟠", "mittel": "🟡", "info": "🔵"}.get(finding["severity"], "⚪")
     msg = f"{icon} [{finding.get('sensor', '?')}] {finding.get('subject', '—')}\n{finding.get('evidence', '')[:200]}"
     try:
-        r = subprocess.run(
-            ["hermes", "send", "--to", "telegram", "-q", msg],
-            capture_output=True, text=True, timeout=30
-        )
-        return {"channel": "telegram", "ok": r.returncode == 0, "output": r.stdout[:100]}
+        r = send_message("telegram", msg, quiet=True)
+        return {"channel": "telegram", "ok": r.ok, "output": r.stdout[:100]}
     except Exception as e:
         return {"channel": "telegram", "ok": False, "error": str(e)}
 

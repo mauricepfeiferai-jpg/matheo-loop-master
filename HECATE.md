@@ -21,6 +21,8 @@ als gated Proposals hierher. Siehe [`ARCHIVE_old_hecate.md`](./ARCHIVE_old_hecat
 
 - `safety/` — Harness: Deny-List + Checkpoint→Verify→Auto-Rollback. JEDE Umsetzung läuft hierdurch.
 - `sensors/` — 7 Sensoren + flock-Bus + Dashboard (`python3 -m sensors.dashboard`). Fehlerisoliert.
+- `hecate/hermes_adapter.py` — Hermes Agent (Nous Research) als Ausführungs- und Messaging-Schicht.
+  `send_message`, `chat`, `run_skill`, `status`. Telegram-Escalation nutzt den Adapter.
 - `hecate/ledger.py` — Innen-Beweis (aus Parallel-Session): kein Output-Artefakt ≥200B = kein Erfolg.
   State: `/var/lib/loop-master/ledger.db` (Abweichung zur Parallel-Session: ein State-Ort für alles).
 - `hecate/report.py` — R1-Verdichter (deterministisch, Anti-Spam-Gedächtnis).

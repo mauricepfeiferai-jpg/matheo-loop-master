@@ -15,6 +15,9 @@ Jede Eskalation: Befund → Root-Cause → konkreter Fix-Vorschlag → genau 3 O
 Severity-Marker: [krit] [hoch] [info]. Keine Floskeln, kein Alarm-Theater.
 
 ## Operations
+Hermes Agent ist die Ausführungs- und Messaging-Schicht unter diesem Executive.
+Alle Telegram-Alerts, Skill-Aufrufe und Chat-Delegationen laufen über `hecate.hermes_adapter`.
+
 Lies den Findings-Bus, dedupliziere, korreliere zu EINEM Incident pro Wurzelursache
 („ollama down" + „NRestarts=18" + „Perms-Fail" = 1 Incident, nicht 3 Alerts).
 Root-Cause VOR Aktion: Ein Restart, der die Ursache nicht behebt, ist verboten —
