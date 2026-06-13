@@ -12,21 +12,28 @@ from pathlib import Path
 from sensors.bus import BUS_PATH
 from hecate.loop_factory import PROPOSALS_DIR
 from hecate.knowledge_gold import enrich_research_brief, sync_gold_db
+from hecate.context_compactor import compact_findings, compact_proposals, CompactionConfig
 
 BRIEF_PATH = Path("/var/lib/loop-master/research_brief.md")
 
 
 def build_brief(bus_path: Path = BUS_PATH, proposals_dir: Path = PROPOSALS_DIR) -> str:
-    findings = []
+    raw_findings = []
     if bus_path.exists():
         for line in bus_path.read_text().splitlines():
             if line.strip():
                 try:
-                    findings.append(json.loads(line))
+                    raw_findings.append(json.loads(line))
                 except json.JSONDecodeError:
                     continue
+
+    cfg = CompactionConfig(max_age_hours=168, max_items=15, include_info=False)
+    findings = compact_findings(raw_findings, cfg)
     classes = Counter(f["f_class"] for f in findings)
-    open_props = sorted(p.name for p in proposals_dir.glob("*.md")) if proposals_dir.exists() else []
+
+    prop_items = []
+    if proposals_dir.exists():
+        prop_items = compact_proposals(list(proposals_dir.glob("*.md")), max_per_section=10)
 
     lines = [
         f"# Hecate Research-Brief — {datetime.now(timezone.utc).date()}",
@@ -43,8 +50,23 @@ def build_brief(bus_path: Path = BUS_PATH, proposals_dir: Path = PROPOSALS_DIR) 
         lines.append(f"- {cls}: {n} Events")
     lines += [
         "",
+        "## Kompakte Finding-Uebersicht",
+    ]
+    for f in findings[:10]:
+        marker = {"krit": "🔴", "hoch": "🟠", "mittel": "🟡", "info": "🔵"}.get(f["severity"], "⚪")
+        lines.append(f"{marker} `{f['sensor']}` **{f['f_class']}** @ {f['subject']}: {f['evidence']}")
+
+    lines += [
+        "",
         "## Offene Proposals (nicht doppeln!)",
-        *([f"- {p}" for p in open_props] or ["- (keine)"]),
+    ]
+    if prop_items:
+        for p in prop_items:
+            lines.append(f"- `{p['file']}` — {p['title']}")
+    else:
+        lines.append("- (keine)")
+
+    lines += [
         "",
         "## Stehende Forschungsfragen",
         "- Backoff-Patterns gegen Wiederbeleber-Konflikte (brainstem-Klasse)",

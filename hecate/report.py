@@ -11,6 +11,7 @@ import urllib.request
 from pathlib import Path
 
 from sensors.bus import BUS_PATH
+from hecate.context_compactor import compact_findings, CompactionConfig
 
 STATE_PATH = Path("/var/lib/loop-master/reported_state.json")
 REPORT_PATH = Path("/var/lib/loop-master/daily_report.md")
@@ -61,15 +62,17 @@ def new_since_last(bus_path: Path = BUS_PATH, state_path: Path = STATE_PATH) -> 
 
 
 def build_report(bus_path: Path = BUS_PATH) -> str:
-    items = list(_dedup(_load_findings(bus_path)).values())
+    raw = _load_findings(bus_path)
+    cfg = CompactionConfig(max_age_hours=12, max_items=10, max_chars_per_evidence=120)
+    items = compact_findings(raw, cfg)
     if not items:
         return "✅ Hecate: keine offenen krit/hoch-Findings."
-    items.sort(key=lambda f: 0 if f["severity"] == "krit" else 1)
     lines = [f"🔁 Hecate-Report — {len(items)} offene Findings "
              f"({sum(1 for f in items if f['severity'] == 'krit')} krit)"]
     for f in items[:5]:
         marker = "🔴" if f["severity"] == "krit" else "🟠"
-        lines.append(f"{marker} {f['f_class']} @ {f['subject']}")
+        evidence = f.get('evidence', '')
+        lines.append(f"{marker} {f['f_class']} @ {f['subject']}: {evidence}")
     if len(items) > 5:
         lines.append(f"… +{len(items) - 5} weitere (Dashboard: python3 -m sensors.dashboard)")
     return "\n".join(lines)

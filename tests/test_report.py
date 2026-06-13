@@ -27,9 +27,11 @@ def _events(tmp_path, events):
 
 
 def test_report_contains_only_krit_and_hoch(tmp_path):
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
     bus = _events(tmp_path, [
-        {"sensor": "s", "severity": "krit", "f_class": "a", "subject": "x", "evidence": "e", "suggested_fix": "", "ts": "2026-06-10T01:00:00+00:00"},
-        {"sensor": "s", "severity": "info", "f_class": "b", "subject": "y", "evidence": "e", "suggested_fix": "", "ts": "2026-06-10T01:00:00+00:00"},
+        {"sensor": "s", "severity": "krit", "f_class": "a", "subject": "x", "evidence": "e", "suggested_fix": "", "ts": now},
+        {"sensor": "s", "severity": "info", "f_class": "b", "subject": "y", "evidence": "e", "suggested_fix": "", "ts": now},
     ])
     rep = build_report(bus_path=bus)
     assert "a @ x" in rep
@@ -37,10 +39,11 @@ def test_report_contains_only_krit_and_hoch(tmp_path):
 
 
 def test_report_drops_stale_events(tmp_path):
-    # Behobene Findings (nur alte Events) duerfen nicht als "offen" gemeldet werden
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
     bus = _events(tmp_path, [
-        {"sensor": "s", "severity": "krit", "f_class": "alt", "subject": "behoben", "evidence": "e", "suggested_fix": "", "ts": "2026-06-09T10:00:00+00:00"},
-        {"sensor": "s", "severity": "krit", "f_class": "neu", "subject": "offen", "evidence": "e", "suggested_fix": "", "ts": "2026-06-10T02:00:00+00:00"},
+        {"sensor": "s", "severity": "krit", "f_class": "alt", "subject": "behoben", "evidence": "e", "suggested_fix": "", "ts": (now - timedelta(hours=24)).isoformat()},
+        {"sensor": "s", "severity": "krit", "f_class": "neu", "subject": "offen", "evidence": "e", "suggested_fix": "", "ts": now.isoformat()},
     ])
     rep = build_report(bus_path=bus)
     assert "neu @ offen" in rep
