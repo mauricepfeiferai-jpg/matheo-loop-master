@@ -1,0 +1,198 @@
+# HECATE Agent Permission Matrix
+# Version: 1.0 | 2026-06-15
+# Authority: DEFAULT DENY unless explicitly ALLOW.
+
+permissions:
+  - key: read_files
+    description: Read files in allowed workspace paths
+  - key: write_files
+    description: Create or modify files in allowed workspace paths
+  - key: run_tests
+    description: Run test commands (pytest, npm test, etc.)
+  - key: shell_readonly
+    description: Execute non-mutating shell commands
+  - key: shell_write
+    description: Execute mutating shell commands
+  - key: systemd_read
+    description: Read systemd status
+  - key: systemd_write
+    description: Restart/stop/start/enable/disable services
+  - key: cron_read
+    description: Read cron entries
+  - key: cron_write
+    description: Modify cron entries
+  - key: telegram_send
+    description: Send Telegram messages
+  - key: network_access
+    description: Access external network
+  - key: git_read
+    description: Read git status/diff/log
+  - key: git_write
+    description: git add/commit/push
+  - key: secrets_access
+    description: Read secrets, .env, keys, tokens
+  - key: legal_mutation
+    description: Modify legal files
+  - key: trading_mutation
+    description: Modify trading configuration or execute trades
+  - key: production_restart
+    description: Restart production services or systems
+
+agents:
+  hetzner_operator:
+    read_files: ALLOW
+    write_files: DENY
+    run_tests: DENY
+    shell_readonly: ALLOW
+    shell_write: DENY
+    systemd_read: ALLOW
+    systemd_write: DENY
+    cron_read: ALLOW
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: DENY
+    git_read: ALLOW
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+  hetzner_sensor:
+    read_files: ALLOW
+    write_files: ALLOW  # only to append classification metadata
+    run_tests: DENY
+    shell_readonly: ALLOW
+    shell_write: DENY
+    systemd_read: DENY
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: DENY
+    git_read: DENY
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+  hetzner_digest:
+    read_files: ALLOW
+    write_files: ALLOW  # only to reports/
+    run_tests: DENY
+    shell_readonly: ALLOW
+    shell_write: DENY
+    systemd_read: DENY
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY  # outputs telegram_worthy flag only
+    network_access: DENY
+    git_read: DENY
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+  hetzner_policy_guard:
+    read_files: ALLOW  # permission matrix, governance
+    write_files: ALLOW  # only to safety/audit log
+    run_tests: DENY
+    shell_readonly: DENY
+    shell_write: DENY
+    systemd_read: DENY
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: DENY
+    git_read: DENY
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+  hetzner_scout:
+    read_files: ALLOW
+    write_files: ALLOW  # only to proposals/
+    run_tests: DENY
+    shell_readonly: DENY
+    shell_write: DENY
+    systemd_read: DENY
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: ALLOW  # read-only public sources only
+    git_read: DENY
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+  mac_builder:
+    read_files: ALLOW
+    write_files: ALLOW  # workspace only
+    run_tests: ALLOW
+    shell_readonly: ALLOW
+    shell_write: DENY
+    systemd_read: DENY
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: DENY  # package install requires Maurice GO
+    git_read: ALLOW
+    git_write: ALLOW  # workspace git only
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+  mac_reviewer:
+    read_files: ALLOW
+    write_files: ALLOW  # only review reports
+    run_tests: ALLOW
+    shell_readonly: ALLOW
+    shell_write: DENY
+    systemd_read: DENY
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: DENY
+    git_read: ALLOW
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+  mac_strategist:
+    read_files: ALLOW
+    write_files: ALLOW  # only strategy memos in reports/
+    run_tests: DENY
+    shell_readonly: DENY
+    shell_write: DENY
+    systemd_read: DENY
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: DENY
+    git_read: ALLOW
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+emergency_override:
+  allowed_for: ["maurice"]
+  requires_reason: true
+  logs_as: safety_block
+  triggers_review: true

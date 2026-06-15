@@ -1,0 +1,28 @@
+# HECATE Telegram Push Gate — maschinenprüfbares Alignment-Gate
+# Wird von notification_rings.py und proposal_notifier.py ausgewertet.
+# Version: 1.0 | 2026-06-14
+
+allow_push_if:
+  - requires_human_decision: true
+  - risk_level:
+      in: [high, critical]
+  - external_action_pending: true
+  - cert_expires_in_days:
+      lt: 14
+  - secret_leak_detected: true
+  - crash_loop_active: true
+
+block_push_if:
+  - routine_status: true
+  - cron_noise: true
+  - no_action_required: true
+  - repeat_alert_within_hours:
+      lt: 24
+  - severity:
+      in: [info]
+
+digest_instead_if:
+  - severity:
+      in: [mittel, info]
+  - no_human_decision_needed: true
+  - loop_running_normally: true

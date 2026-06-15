@@ -1,0 +1,120 @@
+# HECATE Local-First Model Routing Policy
+# Version: 1.0 | 2026-06-15
+
+# Default chain for any task not explicitly routed.
+default:
+  - rules_first
+  - local_small
+  - local_medium
+  - ollama_cloud  # only if enabled by cloud_fallback_policy
+
+# Task-specific routing.
+# Each entry: ordered list of backends to try.
+routes:
+  classify:
+    backends:
+      - rules_first
+      - local_small
+    no_cloud: true
+    rationale: Classification should be fast, deterministic, and local.
+
+  code:
+    backends:
+      - local_medium
+      - local_strong
+      - ollama_cloud
+    no_cloud: false
+    rationale: Code generation can use cloud fallback after local attempt.
+
+  reason:
+    backends:
+      - rules_first
+      - local_medium
+      - local_strong
+      - ollama_cloud
+    no_cloud: false
+    rationale: Reasoning starts local; cloud only if confidence low and budget allows.
+
+  digest:
+    backends:
+      - rules_first
+      - local_medium
+      - ollama_cloud
+    no_cloud: false
+    max_cloud_chars: 2000
+    rationale: Digests can be compressed locally; cloud for weekly deep-digest only.
+
+  review:
+    backends:
+      - local_strong
+      - ollama_cloud
+    no_cloud: false
+    rationale: Review benefits from strongest available model.
+
+  embed:
+    backends:
+      - local_small
+    no_cloud: true
+    rationale: Embeddings run locally, no fallback.
+
+  safety_check:
+    backends:
+      - rules_first
+      - local_small
+    no_cloud: true
+    rationale: Safety gate must be deterministic and local only.
+
+  scout:
+    backends:
+      - local_medium
+      - ollama_cloud
+    no_cloud: false
+    max_cloud_chars: 3000
+    rationale: Scout research can use cloud for weekly synthesis.
+
+  strategy:
+    backends:
+      - local_strong
+      - ollama_cloud
+    no_cloud: false
+    rationale: Strategy synthesis can use cloud with GO and redacted input.
+
+# Backend definitions.
+backends:
+  rules_first:
+    type: deterministic
+    description: Keyword / rule / regex based logic. No model call.
+
+  local_small:
+    type: ollama
+    model: qwen2.5:0.5b
+    host: http://127.0.0.1:11434
+    description: Fast classification and simple extraction.
+
+  local_medium:
+    type: ollama
+    model: qwen2.5:1.5b
+    host: http://127.0.0.1:11434
+    description: General reasoning and digest generation.
+
+  local_strong:
+    type: ollama
+    model: qwen2.5-coder:7b
+    host: http://127.0.0.1:11434
+    description: Code review and complex reasoning.
+
+  ollama_cloud:
+    type: cloud_proxy
+    requires_policy: cloud_fallback_policy
+    description: Ollama Cloud fallback; requires budget and no-cloud-zone check.
+
+  codex_bridge:
+    type: cloud_proxy
+    url: http://127.0.0.1:4101
+    requires_approval: maurice_go
+    description: Local OpenAI proxy to Codex/Claude; explicit GO only.
+
+  claude_chatgpt:
+    type: cloud_api
+    requires_approval: maurice_go
+    description: Direct Claude or ChatGPT access; explicit GO only.

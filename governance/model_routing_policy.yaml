@@ -1,0 +1,52 @@
+# HECATE Model Routing Policy — welches Modell für welche Aufgabe
+# Version: 1.0 | 2026-06-14
+
+# Sovereign Test: Bei Modell-Wechsel darf kein Institutional Knowledge verloren gehen.
+# Knowledge liegt in learning_ledger.jsonl + playbooks/ — NICHT im Modell.
+
+routes:
+  classify:
+    prefer: [local_ollama]
+    fallback: [codex_bridge]
+    rationale: schnell, lokal, kein IP-Risiko
+
+  digest:
+    prefer: [local_ollama]
+    fallback: [codex_bridge]
+    rationale: Zusammenfassung ohne externe Daten
+
+  redact:
+    prefer: [local_ollama]
+    fallback: []
+    rationale: Sensitive Daten NIE an externes Modell
+
+  reason:
+    prefer: [local_ollama, codex_bridge, hermes]
+    rationale: Stufenweise, lokal zuerst
+
+  code:
+    prefer: [codex_bridge, hermes]
+    fallback: [local_ollama]
+    rationale: Codex für Code, Hermes als Fallback
+
+  high_risk_decision:
+    prefer: [hermes]
+    fallback: []
+    requires_human_approval: true
+    rationale: Claude-Qualität für kritische Entscheidungen
+
+blocked:
+  legal_content:
+    models: [ALL_EXTERNAL]
+    action: BLOCK
+    reason: Legal-Inhalte dürfen nie an externe Modelle
+
+  secrets:
+    models: [ALL]
+    action: BLOCK
+    reason: Absolute Grenze — kein Modell bekommt Secrets
+
+  live_trading_params:
+    models: [ALL]
+    action: BLOCK
+    reason: Paper-only bis explizite Freigabe

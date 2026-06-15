@@ -1,0 +1,89 @@
+# HECATE Proposal-Only Policy
+# Version: 1.0 | 2026-06-15
+
+# These actions are always proposal-only. The agent may suggest, but never execute automatically.
+
+proposal_only_actions:
+  - name: systemd_restart
+    description: Restart any systemd service
+    requires: explicit_maurice_go
+
+  - name: systemd_stop
+    description: Stop any systemd service
+    requires: explicit_maurice_go
+
+  - name: systemd_start
+    description: Start any systemd service
+    requires: explicit_maurice_go
+
+  - name: systemd_enable
+    description: Enable a systemd unit
+    requires: explicit_maurice_go
+
+  - name: systemd_disable
+    description: Disable a systemd unit
+    requires: explicit_maurice_go
+
+  - name: cron_write
+    description: Modify crontab or files in /etc/cron.d, /etc/cron.hourly, etc.
+    requires: explicit_maurice_go
+
+  - name: telegram_send
+    description: Send any Telegram message
+    requires: messenger_gate_approval
+
+  - name: trading_mutation
+    description: Change trading configuration or execute any trade
+    requires: explicit_maurice_go
+
+  - name: legal_file_mutation
+    description: Create, edit, move, or delete legal raw files
+    requires: explicit_maurice_go
+
+  - name: secrets_access
+    description: Read secrets, .env files, keys, tokens
+    requires: explicit_maurice_go
+
+  - name: production_service_restart
+    description: Restart production services, Docker containers in production, databases
+    requires: explicit_maurice_go
+
+  - name: destructive_deletion
+    description: rm -rf, git clean -fd, recursive delete, broad cleanup
+    requires: explicit_maurice_go
+
+  - name: external_repo_clone
+    description: Clone any external repository
+    requires: explicit_maurice_go
+
+  - name: package_install
+    description: Install system or language packages
+    requires: explicit_maurice_go
+
+  - name: curl_pipe_bash
+    description: Execute curl | bash or wget | bash
+    requires: never_allowed
+
+  - name: broad_recursive_scan
+    description: Recursive operations on /root, /etc, /var, /opt without scope
+    requires: explicit_maurice_go
+
+  - name: autonomous_loop_creation
+    description: Create cron/systemd/timer based autonomous loops
+    requires: explicit_maurice_go
+
+# Default rule for anything not listed.
+default:
+  mutating_action_requires: proposal_or_explicit_go
+  read_only_action_requires: automatic_if_allowed_by_permission_matrix
+
+# How proposals are produced.
+output_format:
+  file: proposals/agent_<name>_<timestamp>.md
+  sections:
+    - proposed_action
+    - justification
+    - risk_level
+    - rollback_plan
+    - required_go
+    - alternative_read_only

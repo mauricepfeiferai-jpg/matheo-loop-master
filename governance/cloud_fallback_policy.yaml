@@ -1,0 +1,92 @@
+# HECATE Cloud Fallback Policy
+# Version: 1.0 | 2026-06-15
+
+# Principle: local-first. Cloud is fallback, not default.
+
+enabled:
+  ollama_cloud: true
+  codex_bridge: false        # requires explicit Maurice GO per use
+  claude_chatgpt: false      # requires explicit Maurice GO per use
+
+# Budget windows.
+budgets:
+  ollama_cloud:
+    daily_tokens: 100000     # tokens per day
+    hourly_tokens: 20000     # tokens per hour
+    weekly_tokens: 400000    # tokens per week
+    reset_utc: "00:00"
+
+  codex_bridge:
+    daily_calls: 20
+    hourly_calls: 5
+
+  claude_chatgpt:
+    daily_calls: 10
+    hourly_calls: 2
+
+# Conditions for cloud fallback.
+allow_cloud_fallback_when:
+  - local_backend_failed_or_low_confidence
+  - task_is_not_in_no_cloud_zone
+  - budget_window_not_exceeded
+  - task_complexity_justifies_cost
+  - no_forbidden_patterns_in_prompt
+
+# Graceful degradation if limits are reached.
+when_limit_reached:
+  ollama_cloud:
+    - shorten_request
+    - use_local_model_only
+    - delay_scout_review
+    - reduce_digest_depth
+    - queue_for_next_window
+
+  codex_bridge:
+    - use_local_strong_model
+    - wait_for_explicit_go
+    - do_not_retry_automatically
+
+  claude_chatgpt:
+    - use_local_strong_model
+    - wait_for_explicit_go
+    - do_not_retry_automatically
+
+# No-Cloud Zones: never send this content to any cloud model automatically.
+no_cloud_zones:
+  - secrets
+  - api_keys
+  - tokens
+  - private_credentials
+  - raw_legal_evidence
+  - full_legal_documents
+  - live_trading_credentials_or_instructions
+  - production_env_files
+  - private_customer_data
+  - unredacted_personal_data
+  - ssh_keys
+  - dot_env_files
+  - /root/.secrets
+  - /root/.ssh
+  - /etc
+  - any_path_matching: "**/.env*"
+  - any_path_matching: "**/*.key"
+  - any_path_matching: "**/*.pem"
+  - any_path_matching: "**/id_rsa*"
+
+# Forbidden patterns: if found in prompt, block cloud send.
+forbidden_patterns:
+  - '(?i)(api[_-]?key|token|password|passwort|secret|bearer|auth)\s*[:=]\s*\S+'
+  - 'sk-[a-zA-Z0-9]{20,}'
+  - 'ghp_[a-zA-Z0-9]{30,}'
+  - 'xoxb-[a-zA-Z0-9\-]+'
+  - '-----BEGIN (RSA |EC )?PRIVATE KEY-----'
+  - '(?i)az\.?\s*\S+'
+  - '(?i)aktenzeichen\s*\S+'
+
+# Logging.
+audit:
+  log_all_cloud_use: true
+  log_reason: true
+  log_model_used: true
+  log_content_hash: true
+  retention_days: 30
