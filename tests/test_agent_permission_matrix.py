@@ -18,6 +18,11 @@ AGENTS = [
     "hetzner_digest",
     "hetzner_policy_guard",
     "hetzner_scout",
+    "hetzner_archivist",
+    "hetzner_cost_guard",
+    "hetzner_security_scanner",
+    "hetzner_backup_checker",
+    "hetzner_performance_profiler",
     "mac_builder",
     "mac_reviewer",
     "mac_strategist",
@@ -98,3 +103,34 @@ def test_emergency_override_requires_reason(matrix):
     eo = matrix["emergency_override"]
     assert eo["requires_reason"] is True
     assert eo["logs_as"] == "safety_block"
+
+
+def test_archivist_is_read_analyst_with_report_write(matrix):
+    a = matrix["agents"]["hetzner_archivist"]
+    assert a["read_files"] == "ALLOW"
+    assert a["write_files"] == "ALLOW"
+    assert a["shell_write"] == "DENY"
+    assert a["telegram_send"] == "DENY"
+
+
+def test_security_scanner_is_metadata_only(matrix):
+    s = matrix["agents"]["hetzner_security_scanner"]
+    assert s["shell_readonly"] == "ALLOW"
+    assert s["shell_write"] == "DENY"
+    assert s["secrets_access"] == "DENY"
+    assert s["systemd_write"] == "DENY"
+
+
+def test_performance_profiler_reads_metrics(matrix):
+    p = matrix["agents"]["hetzner_performance_profiler"]
+    assert p["shell_readonly"] == "ALLOW"
+    assert p["shell_write"] == "DENY"
+    assert p["production_restart"] == "DENY"
+
+
+def test_cost_guard_and_backup_checker_cannot_mutate(matrix):
+    for name in ("hetzner_cost_guard", "hetzner_backup_checker"):
+        agent = matrix["agents"][name]
+        assert agent["shell_write"] == "DENY"
+        assert agent["systemd_write"] == "DENY"
+        assert agent["telegram_send"] == "DENY"

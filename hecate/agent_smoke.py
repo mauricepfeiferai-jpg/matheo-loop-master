@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hecate.agent_smoke — Manual smoke commands for the 8-agent operating model.
+"""hecate.agent_smoke — Manual smoke commands for the 13-agent operating model.
 
 This module provides documented, manually-invoked smoke commands. It does NOT
 install cron, systemd, or any autonomous loop. It does NOT send Telegram.
@@ -10,6 +10,11 @@ Commands:
   python3 -m hecate.agent_smoke policy_guard --proposals reports/digest_*.md
   python3 -m hecate.agent_smoke builder --task "description"
   python3 -m hecate.agent_smoke reviewer --files file1,file2
+  python3 -m hecate.agent_smoke archivist
+  python3 -m hecate.agent_smoke cost_guard
+  python3 -m hecate.agent_smoke security_scanner
+  python3 -m hecate.agent_smoke backup_checker
+  python3 -m hecate.agent_smoke performance_profiler
 
 Every invocation records a raw_trace in the Learning Ledger if configured.
 """
@@ -341,6 +346,388 @@ def run_reviewer(files: list[str]) -> Path:
     return review_path
 
 
+# ─── Archivist ─────────────────────────────────────────────────────────────────
+
+
+def _file_age_days(path: Path) -> float:
+    try:
+        return (datetime.now(timezone.utc).timestamp() - path.stat().st_mtime) / 86400
+    except OSError:
+        return -1.0
+
+
+def run_archivist() -> Path:
+    """Run the Hetzner Archivist smoke command (read-only curation scan)."""
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = _now().replace(":", "-")
+    report_path = REPORTS_DIR / f"archivist_{ts}.md"
+
+    proposals = sorted(Path("proposals").glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    decision_cards = sorted(Path("decision_cards").glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    reports = sorted(REPORTS_DIR.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+
+    old_proposals = [p for p in proposals if _file_age_days(p) > 30]
+    old_decision_cards = [d for d in decision_cards if _file_age_days(d) > 14]
+    old_reports = [r for r in reports if _file_age_days(r) > 7]
+
+    lines = [
+        f"# HECATE Archivist Report — {ts}",
+        "",
+        "## Scan Summary",
+        f"- Proposals scanned: {len(proposals)} ({len(old_proposals)} older than 30 days)",
+        f"- Decision Cards scanned: {len(decision_cards)} ({len(old_decision_cards)} older than 14 days)",
+        f"- Reports scanned: {len(reports)} ({len(old_reports)} older than 7 days)",
+        "",
+        "## Suggested Archives",
+    ]
+    if old_proposals:
+        for p in old_proposals[:10]:
+            lines.append(f"- `{p.name}` — {int(_file_age_days(p))} days old → `REQUIRES_MAURICE_GO`")
+    else:
+        lines.append("- No proposals older than 30 days.")
+
+    if old_decision_cards:
+        for d in old_decision_cards[:10]:
+            lines.append(f"- `{d.name}` — {int(_file_age_days(d))} days old → `REQUIRES_MAURICE_GO`")
+    else:
+        lines.append("- No decision cards older than 14 days.")
+
+    lines.extend(["", "## Duplicates / Promotion Candidates"])
+    lines.append("- No automatic duplicate detection implemented in smoke stub.")
+
+    lines.extend(["", "## Safety Note"])
+    lines.append("- No files were moved, deleted, or modified. This report is read-only.")
+
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    return report_path
+
+
+# ─── Cost Guard ────────────────────────────────────────────────────────────────
+
+
+def _docker_system_df() -> list[dict]:
+    out, err, rc = _safe_shell(["docker", "system", "df"])
+    if rc != 0 or not out.strip():
+        return []
+    items = []
+    for line in out.splitlines()[1:]:
+        parts = line.split()
+        if len(parts) >= 4:
+            items.append({"type": parts[0], "total": parts[1], "active": parts[2], "size": parts[3]})
+    return items
+
+
+def _dir_size_mb(path: Path) -> int:
+    out, err, rc = _safe_shell(["du", "-sm", str(path)])
+    if rc != 0 or not out.strip():
+        return 0
+    try:
+        return int(out.split()[0])
+    except (ValueError, IndexError):
+        return 0
+
+
+def run_cost_guard() -> Path:
+    """Run the Hetzner Cost Guard smoke command (read-only cost/waste scan)."""
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = _now().replace(":", "-")
+    report_path = REPORTS_DIR / f"cost_guard_{ts}.md"
+
+    docker_df = _docker_system_df()
+    log_size_mb = _dir_size_mb(Path("/root/logs"))
+    tmp_size_mb = _dir_size_mb(Path("/tmp"))
+    disk = _parse_disk()
+    root_use = next((d["use"] for d in disk if d["mount"] == "/"), "unknown")
+
+    risks: list[dict] = []
+    use = root_use.replace("%", "")
+    if use.isdigit() and int(use) >= 85:
+        risks.append({"level": "P1", "source": "disk", "detail": f"root at {root_use}"})
+    if log_size_mb > 5000:
+        risks.append({"level": "P2", "source": "logs", "detail": f"/root/logs is {log_size_mb} MB"})
+    if tmp_size_mb > 5000:
+        risks.append({"level": "P2", "source": "tmp", "detail": f"/tmp is {tmp_size_mb} MB"})
+
+    lines = [
+        f"# HECATE Cost Guard Report — {ts}",
+        "",
+        "## Waste Signals",
+        f"- `/root/logs` size: {log_size_mb} MB",
+        f"- `/tmp` size: {tmp_size_mb} MB",
+        f"- Root disk usage: {root_use}",
+        "",
+        "## Docker System Df",
+    ]
+    if docker_df:
+        for item in docker_df:
+            lines.append(f"- {item['type']}: {item['total']} total / {item['active']} active / {item['size']} size")
+    else:
+        lines.append("- docker system df unavailable.")
+
+    lines.extend(["", "## Risks"])
+    if risks:
+        for r in risks:
+            lines.append(f"- **{r['level']}** | {r['source']}: {r['detail']} → `REQUIRES_MAURICE_GO` if cleanup needed")
+    else:
+        lines.append("- No major cost/waste signals.")
+
+    lines.extend(["", "## Recommended Safe Next Steps"])
+    lines.append("- Re-run later to establish baseline.")
+    lines.append("- Review `/root/logs` rotation policy before any cleanup.")
+
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    return report_path
+
+
+# ─── Security Scanner ──────────────────────────────────────────────────────────
+
+
+def _secret_like_files(root: Path) -> list[str]:
+    found = []
+    for pattern in ("*.env", "*.key", "*.pem", "*.p12"):
+        for p in root.rglob(pattern):
+            # Only collect names, never read contents.
+            if ".git" not in p.parts:
+                found.append(str(p.relative_to(root)))
+    return found[:20]
+
+
+def _permission_scan(paths: list[str]) -> list[dict]:
+    results = []
+    for path in paths:
+        out, err, rc = _safe_shell(["stat", "-c", "%a %n", path])
+        if rc == 0 and out.strip():
+            mode, name = out.strip().split(" ", 1)
+            results.append({"path": name, "mode": mode, "world_readable": mode.endswith("4") or mode.endswith("5") or mode.endswith("6") or mode.endswith("7")})
+    return results
+
+
+def _listening_ports() -> list[str]:
+    out, err, rc = _safe_shell(["ss", "-tlnp"])
+    if rc != 0:
+        return []
+    return [line.strip() for line in out.splitlines()[1:] if line.strip()]
+
+
+def run_security_scanner() -> Path:
+    """Run the Hetzner Security Scanner smoke command (read-only posture scan)."""
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = _now().replace(":", "-")
+    report_path = REPORTS_DIR / f"security_scan_{ts}.md"
+
+    sensitive_paths = ["/root/projects/loop-master", "/root/.ssh", "/root/.secrets"]
+    sensitive_paths = [p for p in sensitive_paths if Path(p).exists()]
+    perms = _permission_scan(sensitive_paths)
+    ports = _listening_ports()
+    secret_files = _secret_like_files(Path("/root/projects/loop-master"))
+
+    findings: list[dict] = []
+    for p in perms:
+        if p["world_readable"]:
+            findings.append({"level": "P1", "source": "permissions", "detail": f"{p['path']} mode {p['mode']}"})
+
+    lines = [
+        f"# HECATE Security Scanner Report — {ts}",
+        "",
+        "## Permission Scan (metadata only)",
+    ]
+    if perms:
+        for p in perms:
+            marker = "🔴" if p["world_readable"] else "🟢"
+            lines.append(f"- {marker} `{p['path']}` mode {p['mode']}")
+    else:
+        lines.append("- No sensitive paths readable.")
+
+    lines.extend(["", "## Secret-like Filenames (names only, contents NOT read)"])
+    if secret_files:
+        for name in secret_files:
+            lines.append(f"- `{name}`")
+    else:
+        lines.append("- No secret-like filenames found in workspace.")
+
+    lines.extend(["", "## Listening Ports (local sockets only)"])
+    if ports:
+        lines.append(f"- {len(ports)} listening sockets detected.")
+        for line in ports[:20]:
+            lines.append(f"  - `{line}`")
+    else:
+        lines.append("- No listening ports data available.")
+
+    lines.extend(["", "## Findings"])
+    if findings:
+        for f in findings:
+            lines.append(f"- **{f['level']}** | {f['source']}: {f['detail']} → `REQUIRES_MAURICE_GO` if remediation needed")
+    else:
+        lines.append("- No P0/P1 findings. Posture looks acceptable.")
+
+    lines.extend(["", "## Safety Note"])
+    lines.append("- No permissions changed. No file contents read. No network probes sent.")
+
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    return report_path
+
+
+# ─── Backup Checker ────────────────────────────────────────────────────────────
+
+
+def _backup_destinations() -> list[Path]:
+    candidates = [
+        Path("/root/_backups"),
+        Path("/var/lib/loop-master/backups"),
+        Path("/root/projects/loop-master/backups"),
+    ]
+    return [p for p in candidates if p.exists()]
+
+
+def run_backup_checker() -> Path:
+    """Run the Hetzner Backup Checker smoke command (read-only coverage scan)."""
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = _now().replace(":", "-")
+    report_path = REPORTS_DIR / f"backup_check_{ts}.md"
+
+    destinations = _backup_destinations()
+    lines = [
+        f"# HECATE Backup Check Report — {ts}",
+        "",
+        "## Backup Destinations",
+    ]
+
+    gaps: list[dict] = []
+    if destinations:
+        for dest in destinations:
+            files = sorted(dest.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
+            newest_age_days = _file_age_days(files[0]) if files else float("inf")
+            lines.append(f"- `{dest}` — {len(files)} items, newest {int(newest_age_days)} days old")
+            if newest_age_days > 2:
+                gaps.append({"level": "P2", "source": "freshness", "detail": f"{dest} newest backup is {int(newest_age_days)} days old"})
+    else:
+        lines.append("- No known backup destinations found.")
+        gaps.append({"level": "P2", "source": "coverage", "detail": "No backup destinations configured or reachable"})
+
+    lines.extend(["", "## Critical Paths Without Visible Backup"])
+    critical_paths = [Path("/root/projects/loop-master"), Path("/root/vault"), Path("/root/.claude")]
+    for cp in critical_paths:
+        marker = "🟢" if cp.exists() else "⚪"
+        lines.append(f"- {marker} `{cp}` — backup coverage not verified")
+
+    lines.extend(["", "## Gaps"])
+    if gaps:
+        for g in gaps:
+            lines.append(f"- **{g['level']}** | {g['source']}: {g['detail']} → `REQUIRES_MAURICE_GO` for remediation")
+    else:
+        lines.append("- No major backup gaps detected.")
+
+    lines.extend(["", "## Safety Note"])
+    lines.append("- No backups were run, moved, or deleted. This is a metadata-only scan.")
+
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    return report_path
+
+
+# ─── Performance Profiler ───────────────────────────────────────────────────────
+
+
+PERF_SNAPSHOTS_DIR = Path("/var/lib/loop-master/perf_snapshots")
+
+
+def _docker_stats_summary() -> list[dict]:
+    out, err, rc = _safe_shell(["docker", "stats", "--no-stream", "--format", "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}"])
+    if rc != 0 or not out.strip():
+        return []
+    items = []
+    for line in out.splitlines()[1:]:
+        parts = line.split("\t")
+        if len(parts) >= 3:
+            items.append({"name": parts[0], "cpu": parts[1], "mem": parts[2]})
+    return items
+
+
+def _ollama_ps() -> list[dict]:
+    out, err, rc = _safe_shell(["ollama", "ps"])
+    if rc != 0 or not out.strip():
+        return []
+    items = []
+    for line in out.splitlines()[1:]:
+        parts = line.split()
+        if len(parts) >= 4:
+            items.append({"name": parts[0], "cpu": parts[1], "mem": parts[2], "size": parts[3]})
+    return items
+
+
+def _load_snapshot() -> dict:
+    load_out, _, _ = _safe_shell(["cat", "/proc/loadavg"])
+    parts = load_out.strip().split()
+    return {"load1": parts[0] if parts else "?", "load5": parts[1] if len(parts) > 1 else "?", "load15": parts[2] if len(parts) > 2 else "?"}
+
+
+def run_performance_profiler() -> Path:
+    """Run the Hetzner Performance Profiler smoke command (read-only metrics)."""
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    PERF_SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = _now().replace(":", "-")
+    report_path = REPORTS_DIR / f"performance_profile_{ts}.md"
+
+    snapshot = {
+        "ts": _now(),
+        "load": _load_snapshot(),
+        "memory": _parse_memory(),
+        "disk": _parse_disk(),
+        "docker": _docker_stats_summary(),
+        "ollama": _ollama_ps(),
+    }
+    snapshot_path = PERF_SNAPSHOTS_DIR / f"snapshot_{ts}.json"
+    snapshot_path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
+
+    risks: list[dict] = []
+    root_use = next((d["use"] for d in snapshot["disk"] if d["mount"] == "/"), "unknown")
+    use = root_use.replace("%", "")
+    if use.isdigit() and int(use) >= 90:
+        risks.append({"level": "P1", "source": "disk", "detail": f"root at {root_use}"})
+
+    load1 = snapshot["load"]["load1"]
+    try:
+        if float(load1) > 8.0:
+            risks.append({"level": "P2", "source": "load", "detail": f"1m load {load1}"})
+    except ValueError:
+        pass
+
+    lines = [
+        f"# HECATE Performance Profile — {ts}",
+        "",
+        "## Current Snapshot",
+        f"- Load 1m/5m/15m: {snapshot['load']['load1']} / {snapshot['load']['load5']} / {snapshot['load']['load15']}",
+        f"- Memory used: {snapshot['memory'].get('used', '?')} / {snapshot['memory'].get('mem', '?')}",
+        f"- Root disk: {root_use}",
+        "",
+        "## Containers",
+    ]
+    if snapshot["docker"]:
+        for c in snapshot["docker"][:20]:
+            lines.append(f"- `{c['name']}` — CPU {c['cpu']}, Mem {c['mem']}")
+    else:
+        lines.append("- docker stats unavailable.")
+
+    lines.extend(["", "## Ollama Models"])
+    if snapshot["ollama"]:
+        for m in snapshot["ollama"]:
+            lines.append(f"- `{m['name']}` — CPU {m['cpu']}, Mem {m['mem']}, Size {m['size']}")
+    else:
+        lines.append("- No Ollama models currently loaded.")
+
+    lines.extend(["", "## Risks"])
+    if risks:
+        for r in risks:
+            lines.append(f"- **{r['level']}** | {r['source']}: {r['detail']} → `REQUIRES_MAURICE_GO` if tuning needed")
+    else:
+        lines.append("- No P1/P2 performance regressions detected.")
+
+    lines.extend(["", "## Snapshot"])
+    lines.append(f"- Raw snapshot saved to `{snapshot_path}`")
+
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    return report_path
+
+
 # ─── Learning Ledger integration ───────────────────────────────────────────────
 
 
@@ -383,6 +770,12 @@ def _cli() -> int:
     reviewer = sub.add_parser("reviewer", help="Run Mac Reviewer smoke")
     reviewer.add_argument("--files", default="", help="Comma-separated file paths")
 
+    sub.add_parser("archivist", help="Run Hetzner Archivist smoke (read-only)")
+    sub.add_parser("cost_guard", help="Run Hetzner Cost Guard smoke (read-only)")
+    sub.add_parser("security_scanner", help="Run Hetzner Security Scanner smoke (read-only)")
+    sub.add_parser("backup_checker", help="Run Hetzner Backup Checker smoke (read-only)")
+    sub.add_parser("performance_profiler", help="Run Hetzner Performance Profiler smoke (read-only)")
+
     args = parser.parse_args()
 
     if args.cmd == "operator":
@@ -414,6 +807,36 @@ def _cli() -> int:
         path = run_reviewer(files)
         print(f"Reviewer report: {path}")
         record_smoke("mac_reviewer", "review smoke files", "human/smoke", ["review"], [str(path)])
+        return 0
+
+    if args.cmd == "archivist":
+        path = run_archivist()
+        print(f"Archivist report: {path}")
+        record_smoke("hetzner_archivist", "curate proposals and reports", "rules/local", ["file_read"], [str(path)])
+        return 0
+
+    if args.cmd == "cost_guard":
+        path = run_cost_guard()
+        print(f"Cost Guard report: {path}")
+        record_smoke("hetzner_cost_guard", "monitor cost and waste signals", "rules/local", ["shell_readonly"], [str(path)])
+        return 0
+
+    if args.cmd == "security_scanner":
+        path = run_security_scanner()
+        print(f"Security Scanner report: {path}")
+        record_smoke("hetzner_security_scanner", "scan security posture", "rules-only", ["metadata_scan"], [str(path)])
+        return 0
+
+    if args.cmd == "backup_checker":
+        path = run_backup_checker()
+        print(f"Backup Checker report: {path}")
+        record_smoke("hetzner_backup_checker", "validate backup coverage", "rules/local", ["file_read"], [str(path)])
+        return 0
+
+    if args.cmd == "performance_profiler":
+        path = run_performance_profiler()
+        print(f"Performance Profiler report: {path}")
+        record_smoke("hetzner_performance_profiler", "track performance trends", "rules/local", ["shell_readonly"], [str(path)])
         return 0
 
     parser.print_help()

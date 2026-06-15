@@ -134,6 +134,101 @@ agents:
     trading_mutation: DENY
     production_restart: DENY
 
+  hetzner_archivist:
+    read_files: ALLOW
+    write_files: ALLOW  # only to reports/
+    run_tests: DENY
+    shell_readonly: DENY
+    shell_write: DENY
+    systemd_read: DENY
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: DENY
+    git_read: DENY
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+  hetzner_cost_guard:
+    read_files: ALLOW
+    write_files: ALLOW  # only to reports/
+    run_tests: DENY
+    shell_readonly: ALLOW  # read-only cost/disk/container metadata commands only
+    shell_write: DENY
+    systemd_read: DENY
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: DENY
+    git_read: DENY
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+  hetzner_security_scanner:
+    read_files: ALLOW
+    write_files: ALLOW  # only to reports/
+    run_tests: DENY
+    shell_readonly: ALLOW  # metadata-only permission listings
+    shell_write: DENY
+    systemd_read: ALLOW  # service list/status
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: DENY
+    git_read: DENY
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+  hetzner_backup_checker:
+    read_files: ALLOW
+    write_files: ALLOW  # only to reports/
+    run_tests: DENY
+    shell_readonly: ALLOW  # backup destination listings
+    shell_write: DENY
+    systemd_read: DENY
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: DENY
+    git_read: DENY
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
+  hetzner_performance_profiler:
+    read_files: ALLOW
+    write_files: ALLOW  # reports/ and perf_snapshots/
+    run_tests: DENY
+    shell_readonly: ALLOW  # read system metrics
+    shell_write: DENY
+    systemd_read: DENY
+    systemd_write: DENY
+    cron_read: DENY
+    cron_write: DENY
+    telegram_send: DENY
+    network_access: DENY
+    git_read: DENY
+    git_write: DENY
+    secrets_access: DENY
+    legal_mutation: DENY
+    trading_mutation: DENY
+    production_restart: DENY
+
   mac_builder:
     read_files: ALLOW
     write_files: ALLOW  # workspace only
