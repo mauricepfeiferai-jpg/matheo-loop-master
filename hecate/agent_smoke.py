@@ -6,15 +6,18 @@ install cron, systemd, or any autonomous loop. It does NOT send Telegram.
 
 Commands:
   python3 -m hecate.agent_smoke operator
+  python3 -m hecate.agent_smoke sensor
   python3 -m hecate.agent_smoke digest --input reports/operator_report_*.md
   python3 -m hecate.agent_smoke policy_guard --proposals reports/digest_*.md
-  python3 -m hecate.agent_smoke builder --task "description"
-  python3 -m hecate.agent_smoke reviewer --files file1,file2
+  python3 -m hecate.agent_smoke scout
   python3 -m hecate.agent_smoke archivist
   python3 -m hecate.agent_smoke cost_guard
   python3 -m hecate.agent_smoke security_scanner
   python3 -m hecate.agent_smoke backup_checker
   python3 -m hecate.agent_smoke performance_profiler
+  python3 -m hecate.agent_smoke builder --task "description"
+  python3 -m hecate.agent_smoke reviewer --files file1,file2
+  python3 -m hecate.agent_smoke strategist --topic "topic"
 
 Every invocation records a raw_trace in the Learning Ledger if configured.
 """
@@ -344,6 +347,161 @@ def run_reviewer(files: list[str]) -> Path:
 
     review_path.write_text("\n".join(lines), encoding="utf-8")
     return review_path
+
+
+# ─── Sensor ────────────────────────────────────────────────────────────────────
+
+
+def _read_findings_tail(n: int = 50) -> list[str]:
+    findings_path = Path("/var/lib/loop-master/findings.jsonl")
+    if not findings_path.exists():
+        return []
+    lines = findings_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    return lines[-n:]
+
+
+def _classify_line(line: str) -> str:
+    lowered = line.lower()
+    if any(k in lowered for k in ["error", "traceback", "failed", "crash", "exception", "restart loop"]):
+        return "fehler"
+    if any(k in lowered for k in ["approve", "go", "decision", "requires"]):
+        return "entscheidung"
+    if any(k in lowered for k in ["ok", "success", "green", "passed"]):
+        return "erfolg"
+    if any(k in lowered for k in ["heartbeat", "routine", "status", "check passed"]):
+        return "noise"
+    if any(k in lowered for k in ["deny", "forbidden", "safety_block"]):
+        return "safety_block"
+    return "unbekannt"
+
+
+def run_sensor() -> Path:
+    """Run the Hetzner Sensor smoke command (read-only event classification)."""
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = _now().replace(":", "-")
+    report_path = REPORTS_DIR / f"sensor_report_{ts}.md"
+
+    findings = _read_findings_tail(50)
+    classified: dict[str, int] = {}
+    worth_learning = 0
+    examples: list[str] = []
+    for line in findings:
+        cls = _classify_line(line)
+        classified[cls] = classified.get(cls, 0) + 1
+        if cls in ("fehler", "safety_block", "entscheidung"):
+            worth_learning += 1
+        if len(examples) < 5 and cls != "noise":
+            examples.append(f"`{cls}`: {line[:100]}")
+
+    lines = [
+        f"# HECATE Sensor Report — {ts}",
+        "",
+        "## Classification Counts",
+    ]
+    for cls, count in sorted(classified.items(), key=lambda x: -x[1]):
+        lines.append(f"- {cls}: {count}")
+
+    lines.extend(["", "## Examples (non-noise)"])
+    if examples:
+        for ex in examples:
+            lines.append(f"- {ex}")
+    else:
+        lines.append("- No non-noise examples in window.")
+
+    lines.extend(["", "## Worth Learning"])
+    lines.append(f"- {worth_learning} event(s) flagged for learning.")
+
+    lines.extend(["", "## Safety Note"])
+    lines.append("- Source findings bus not mutated.")
+
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    return report_path
+
+
+# ─── Scout ─────────────────────────────────────────────────────────────────────
+
+
+def run_scout() -> Path:
+    """Run the Hetzner Scout smoke command (read-only research/opportunity scan)."""
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    PROPOSALS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = _now().replace(":", "-")
+    report_path = REPORTS_DIR / f"scout_report_{ts}.md"
+    proposal_path = PROPOSALS_DIR / f"scout_smoke_{ts}.md"
+
+    # Read existing proposals to avoid duplicate-looking stubs.
+    existing = sorted(PROPOSALS_DIR.glob("scout_*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    recent_count = len([p for p in existing if _file_age_days(p) < 1])
+
+    lines = [
+        f"# HECATE Scout Report — {ts}",
+        "",
+        "## Research Sources",
+        "- GitHub trending (read-only search): not implemented in smoke stub.",
+        "- Public AI/agent articles: not implemented in smoke stub.",
+        "- Curated RSS/feeds: not implemented in smoke stub.",
+        "",
+        "## Opportunities",
+        "- No live research performed in smoke stub. This is a wiring test.",
+        "",
+        "## Safety Note",
+        "- No external posts, no repository cloning, no package installation.",
+    ]
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+
+    prop_lines = [
+        f"# Scout Smoke Proposal — {ts}",
+        "",
+        "**Source:** smoke test",
+        "**Relevance:** wiring validation",
+        "**Risk:** low",
+        "**Next step:** Implement read-only research adapter (GitHub/RSS/X via approved tools).",
+        "",
+        "## Status",
+        "- PROPOSAL_ONLY — no automatic action taken.",
+    ]
+    proposal_path.write_text("\n".join(prop_lines), encoding="utf-8")
+
+    return report_path
+
+
+# ─── Strategist ────────────────────────────────────────────────────────────────
+
+
+def run_strategist(topic: str = "next HECATE priorities") -> Path:
+    """Run the Mac Strategist smoke command (read-only strategy memo)."""
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = _now().replace(":", "-")
+    report_path = REPORTS_DIR / f"strategist_{ts}.md"
+
+    lines = [
+        f"# Mac Strategist Memo — {ts}",
+        "",
+        f"**Topic:** {topic}",
+        "",
+        "## Observations",
+        "- HECATE now has 13 agent contracts and smoke commands.",
+        "- Daily smoke wrapper exists but is not yet cron-activated.",
+        "- Eval framework and performance dashboard are planned next.",
+        "",
+        "## Priorities",
+        "1. Stabilize daily smoke runs for 7 days.",
+        "2. Build eval framework for the 5 new Hetzner agents.",
+        "3. Build agent performance dashboard.",
+        "",
+        "## Risks",
+        "- Running too many agents before evaluation creates noise.",
+        "- Mac agents need local model access; verify before deployment.",
+        "",
+        "## Next Actions",
+        "- Maurice GO for cron activation.",
+        "- Maurice GO for eval framework implementation.",
+        "",
+        "## Safety Note",
+        "- No files modified. No external posting. Strategy memo only.",
+    ]
+    report_path.write_text("\n".join(lines), encoding="utf-8")
+    return report_path
 
 
 # ─── Archivist ─────────────────────────────────────────────────────────────────
@@ -770,11 +928,16 @@ def _cli() -> int:
     reviewer = sub.add_parser("reviewer", help="Run Mac Reviewer smoke")
     reviewer.add_argument("--files", default="", help="Comma-separated file paths")
 
+    sub.add_parser("sensor", help="Run Hetzner Sensor smoke (read-only)")
+    sub.add_parser("scout", help="Run Hetzner Scout smoke (read-only)")
     sub.add_parser("archivist", help="Run Hetzner Archivist smoke (read-only)")
     sub.add_parser("cost_guard", help="Run Hetzner Cost Guard smoke (read-only)")
     sub.add_parser("security_scanner", help="Run Hetzner Security Scanner smoke (read-only)")
     sub.add_parser("backup_checker", help="Run Hetzner Backup Checker smoke (read-only)")
     sub.add_parser("performance_profiler", help="Run Hetzner Performance Profiler smoke (read-only)")
+
+    strategist = sub.add_parser("strategist", help="Run Mac Strategist smoke (read-only)")
+    strategist.add_argument("--topic", default="next HECATE priorities", help="Strategy topic")
 
     args = parser.parse_args()
 
@@ -782,6 +945,12 @@ def _cli() -> int:
         path = run_operator()
         print(f"Operator report: {path}")
         record_smoke("hetzner_operator", "inspect system state", "rules/local", ["shell_readonly"], [str(path)])
+        return 0
+
+    if args.cmd == "sensor":
+        path = run_sensor()
+        print(f"Sensor report: {path}")
+        record_smoke("hetzner_sensor", "classify event stream", "rules-only", ["classify"], [str(path)])
         return 0
 
     if args.cmd == "digest":
@@ -796,6 +965,12 @@ def _cli() -> int:
         record_smoke("hetzner_policy_guard", "evaluate proposed actions", "rules-only", ["verdict"], [str(path)])
         return 0
 
+    if args.cmd == "scout":
+        path = run_scout()
+        print(f"Scout report: {path}")
+        record_smoke("hetzner_scout", "research opportunity", "rules/local", ["proposal"], [str(path)])
+        return 0
+
     if args.cmd == "builder":
         path = run_builder(args.task)
         print(f"Builder proposal: {path}")
@@ -807,6 +982,12 @@ def _cli() -> int:
         path = run_reviewer(files)
         print(f"Reviewer report: {path}")
         record_smoke("mac_reviewer", "review smoke files", "human/smoke", ["review"], [str(path)])
+        return 0
+
+    if args.cmd == "strategist":
+        path = run_strategist(args.topic)
+        print(f"Strategist memo: {path}")
+        record_smoke("mac_strategist", f"strategy: {args.topic}", "rules/local", ["memo"], [str(path)])
         return 0
 
     if args.cmd == "archivist":
